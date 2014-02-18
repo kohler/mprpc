@@ -7,8 +7,8 @@ MPRPC is a simple demonstration program for msgpack-based RPC.
 First run `./bootstrap.sh`, which will check out required helper
 libraries ([Tamer](http://github.com/kohler/tamer)). Then run
 `./configure`. You may need to specify a C++11 compiler explicitly,
-for example with `./configure CXX='YOUR_COMPILER -std=gnu++0x'`. Then
-run `make`.
+for example with `./configure CXX='YOUR_COMPILER -std=gnu++0x
+-stdlib=libc++'`. Then run `make`.
 
 ## RPC format ##
 
