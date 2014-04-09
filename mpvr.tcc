@@ -923,7 +923,7 @@ void Vrreplica::process_commit_log(const Json& msg) {
             if (logno == log_.last())
                 log_.push_back(std::move(li));
             else if (!log_[logno].is_real()
-                     || log_[logno].viewno < li.viewno)
+                     || log_[logno].viewno < cur_view_.viewno)
                 log_[logno] = std::move(li);
         }
 
@@ -1495,8 +1495,9 @@ void Vrtestcollection::check() {
     lognumber_t last_logno = last_lognos.back();
 
     // commit never goes backwards
-    assert(max_decideno >= decideno_);
+    assert(decideno_ <= max_decideno);
     decideno_ = max_decideno;
+    assert(first_logno <= decideno_);
 
     // advance commit number (check replication)
     std::vector<unsigned> commitmap;
@@ -1506,14 +1507,16 @@ void Vrtestcollection::check() {
         commitmap.assign(replicas_.size(), 1);
         for (size_t i = 0; i != replicas_.size(); ++i) {
             Vrreplica* r = replicas_[i];
-            if (commitno_ >= r->first_logno() && commitno_ < r->last_logno()
+            if (commitno_ >= r->first_logno()
+                && commitno_ < r->last_logno()
                 && r->log_entry(commitno_).is_real())
                 itemmap[i] = &r->log_entry(commitno_);
         }
         for (size_t i = 1; i != replicas_.size(); ++i)
             if (itemmap[i])
                 for (size_t j = 0; j != i; ++j)
-                    if (itemmap[j] && itemmap[i]->viewno == itemmap[j]->viewno) {
+                    if (itemmap[j]
+                        && itemmap[i]->viewno == itemmap[j]->viewno) {
                         ++commitmap[j];
                         break;
                     }
