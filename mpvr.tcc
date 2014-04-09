@@ -342,10 +342,13 @@ String Vrreplica::unparse_view_state() const {
     StringAccum sa;
     sa << "v#" << cur_view_.viewno
        << (cur_view_.me_primary() ? "p" : "");
-    if (next_view_.viewno != cur_view_.viewno)
+    if (next_view_.viewno != cur_view_.viewno) {
         sa << "<v#" << next_view_.viewno
            << (next_view_.me_primary() ? "p" : "")
-           << ":" << next_view_.nacked << "." << next_view_.nconfirmed << ">";
+           << ":" << next_view_.nacked;
+        if (next_view_.me_primary())
+            sa << "." << next_view_.nconfirmed << ">";
+    }
     sa << " ";
     if (!log_.first() && log_.empty()) {
         assert(!commitno_);
@@ -688,12 +691,12 @@ Json Vrreplica::view_payload(const String& peer_uid) {
     if (it != next_view_.members.end() && it->acked)
         payload["ack"] = true;
     if (cur_view_.nacked > cur_view_.f()
-        && next_view_.nacked > next_view_.f())
-        payload["confirm"] = true;
-    if (next_view_.viewno != cur_view_.viewno
+        && next_view_.nacked > next_view_.f()
+        && next_view_.viewno != cur_view_.viewno
         && !next_view_.me_primary()
         && next_view_.primary().has_ackno()
         && peer_uid == next_view_.primary().uid) {
+        payload["confirm"] = true;
         lognumber_t logno = std::max(log_.first(),
                                      next_view_.primary().ackno());
         payload["logno"] = logno.value();
