@@ -648,11 +648,6 @@ void Vrreplica::process_view_check_log(Vrchannel* who, Json& payload) {
 }
 
 void Vrreplica::primary_adopt_view_change(Vrchannel* who) {
-    next_view_.account_all_acks();
-    cur_view_ = next_view_;
-    process_at_number(cur_view_.viewno, at_view_);
-    primary_keepalive_loop();
-
     // transfer next_log_ into log_
     for (lognumber_t i = next_log_.first(); i != next_log_.last(); ++i)
         if (i == log_.last())
@@ -669,6 +664,15 @@ void Vrreplica::primary_adopt_view_change(Vrchannel* who) {
             log_.resize(i - log_.first());
             break;
         }
+
+    // no one's logs are valid beyond the end of the current log
+    next_view_.reduce_matching_logno(last_logno());
+
+    // actually switch to new view
+    next_view_.account_all_acks();
+    cur_view_ = next_view_;
+    process_at_number(cur_view_.viewno, at_view_);
+    primary_keepalive_loop();
 
     // send log to replicas
     for (auto it = cur_view_.members.begin();
