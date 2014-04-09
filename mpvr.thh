@@ -162,8 +162,7 @@ struct Vrview {
     void add(String uid, const String& my_uid);
     void advance();
 
-    bool operator==(const Vrview& x) const;
-    bool operator!=(const Vrview& x) const { return !(*this == x); }
+    int compare(const Vrview& x) const;
     bool shared_quorum(const Vrview& x) const;
 
     void clear_preparation(bool is_next);
@@ -174,6 +173,14 @@ struct Vrview {
     void account_ack(member_type* peer, lognumber_t ackno);
     bool account_all_acks();
 };
+
+inline bool operator==(const Vrview& a, const Vrview& b) {
+    return a.compare(b) == 0;
+}
+
+inline bool operator!=(const Vrview& a, const Vrview& b) {
+    return a.compare(b) != 0;
+}
 
 
 class Vrreplica {

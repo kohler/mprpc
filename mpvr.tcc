@@ -181,16 +181,17 @@ inline Json Vrview::members_json() const {
     return j;
 }
 
-bool Vrview::operator==(const Vrview& x) const {
-    if (viewno != x.viewno
-        || primary_index != x.primary_index
-        || my_index != x.my_index
-        || members.size() != x.members.size())
-        return false;
+int Vrview::compare(const Vrview& x) const {
+    if (viewno != x.viewno)
+        return viewno < x.viewno ? -1 : 1;
+    if (members.size() != x.members.size())
+        return members.size() < x.members.size() ? -1 : 1;
+    if (primary_index != x.primary_index)
+        return primary_index < x.primary_index ? -1 : 1;
     for (size_t i = 0; i != members.size(); ++i)
-        if (members[i].uid != x.members[i].uid)
-            return false;
-    return true;
+        if (int cmp = members[i].uid.compare(x.members[i].uid))
+            return cmp;
+    return 0;
 }
 
 bool Vrview::shared_quorum(const Vrview& x) const {
@@ -533,11 +534,17 @@ void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
     }
 
     viewnumberdiff_t vdiff = (viewnumberdiff_t) (v.viewno - next_view_.viewno);
+    int vcompare = vdiff == 0 ? next_view_.compare(v) : 0;
     int want_send;
-    if (vdiff < 0
-        || (vdiff == 0 && v != next_view_)
-        || !next_view_.shared_quorum(v))
-        // always respond with current view, take no other action
+    if (vdiff == 0 && vcompare > 0) {
+        // advance view number
+        next_view_.advance();
+        start_view_change();
+        return;
+    } else if (vdiff < 0
+               || (vdiff == 0 && vcompare < 0)
+               || !next_view_.shared_quorum(v))
+        // respond with current view, take no other action
         want_send = 2;
     else if (vdiff == 0) {
         cur_view_.prepare(who->remote_uid(), payload, false);
@@ -854,8 +861,12 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
     }
 
     viewnumber_t view(msg[2].to_u());
-    if (view == next_view_.viewno
-        && cur_view_.viewno != next_view_.viewno) {
+    if (view == cur_view_.viewno && !between_views())
+        /* OK, process below */;
+    else if (view == next_view_.viewno
+             && cur_view_.viewno != next_view_.viewno
+             && next_view_sent_confirm_) {
+        // after confirm is sent, a commit acts to change the view
         assert(!next_view_.me_primary()
                && next_view_.primary().uid == who->remote_uid());
         cur_view_ = next_view_;
@@ -865,7 +876,13 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
         sackno_ = std::max(commitno_, sackno_);
         process_at_number(cur_view_.viewno, at_view_);
         backup_keepalive_loop();
-    } else if (view != cur_view_.viewno || between_views()) {
+    } else if (view == next_view_.viewno) {
+        // couldn't complete view change because we haven't heard from other
+        // members of the view; broadcast view to collect acknowledgements
+        broadcast_view();
+        return;
+    } else {
+        // odd view
         send_view(who);
         return;
     }
