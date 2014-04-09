@@ -282,21 +282,22 @@ Json Vrview::acks_json() const {
 void Vrview::account_ack(member_type* peer, lognumber_t ackno) {
     bool has_old_ackno = peer->has_ackno();
     lognumber_t old_ackno = peer->ackno();
-    assert(!has_old_ackno || old_ackno <= ackno);
-    peer->has_ackno_ = true;
-    peer->ackno_ = ackno;
-    peer->ackno_count_ = 0;
-    if (!has_old_ackno || old_ackno != ackno)
-        peer->ackno_changed_at_ = tamer::drecent();
-    for (auto it = members.begin(); it != members.end(); ++it)
-        if (it->has_ackno_) {
-            if (it->ackno_ <= ackno
-                && (!has_old_ackno || it->ackno_ > old_ackno)
-                && &*it != peer)
-                ++it->ackno_count_;
-            if (ackno <= it->ackno_)
-                ++peer->ackno_count_;
-        }
+    if (!has_old_ackno || old_ackno <= ackno) {
+        peer->has_ackno_ = true;
+        peer->ackno_ = ackno;
+        peer->ackno_count_ = 0;
+        if (!has_old_ackno || old_ackno != ackno)
+            peer->ackno_changed_at_ = tamer::drecent();
+        for (auto it = members.begin(); it != members.end(); ++it)
+            if (it->has_ackno_) {
+                if (it->ackno_ <= ackno
+                    && (!has_old_ackno || it->ackno_ > old_ackno)
+                    && &*it != peer)
+                    ++it->ackno_count_;
+                if (ackno <= it->ackno_)
+                    ++peer->ackno_count_;
+            }
+    }
 }
 
 bool Vrview::account_all_acks() {
@@ -347,7 +348,8 @@ String Vrreplica::unparse_view_state() const {
            << (next_view_.me_primary() ? "p" : "")
            << ":" << next_view_.nacked;
         if (next_view_.me_primary())
-            sa << "." << next_view_.nconfirmed << ">";
+            sa << "." << next_view_.nconfirmed;
+        sa << ">";
     }
     sa << " ";
     if (!log_.first() && log_.empty()) {
