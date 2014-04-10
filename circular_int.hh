@@ -16,6 +16,8 @@
 #ifndef KVDB_CIRCULAR_INT_HH
 #define KVDB_CIRCULAR_INT_HH 1
 #include "compiler.hh"
+#include <iostream>
+class StringAccum;
 
 template <typename T>
 class circular_int {
@@ -97,6 +99,12 @@ class circular_int {
     circular_int<T> operator+(long x) const {
 	return circular_int<T>(v_ + x);
     }
+    circular_int<T> operator+(unsigned long long x) const {
+	return circular_int<T>(v_ + x);
+    }
+    circular_int<T> operator+(long long x) const {
+	return circular_int<T>(v_ + x);
+    }
     circular_int<T> next_nonzero() const {
 	value_type v = v_ + 1;
 	return circular_int<T>(v + !v);
@@ -115,6 +123,12 @@ class circular_int {
 	return circular_int<T>(v_ - x);
     }
     circular_int<T> operator-(long x) const {
+	return circular_int<T>(v_ - x);
+    }
+    circular_int<T> operator-(unsigned long long x) const {
+	return circular_int<T>(v_ - x);
+    }
+    circular_int<T> operator-(long long x) const {
 	return circular_int<T>(v_ - x);
     }
     difference_type operator-(circular_int<T> x) const {
@@ -168,6 +182,16 @@ template <typename T>
 inline circular_int<T> cmpxchg(circular_int<T> *object, circular_int<T> expected,
                                circular_int<T> desired) {
     return object->cmpxchg(expected, desired);
+}
+
+template <typename T>
+inline StringAccum& operator<<(StringAccum& sa, circular_int<T> x) {
+    return sa << x.value();
+}
+
+template <typename T>
+inline std::ostream& operator<<(std::ostream& str, circular_int<T> x) {
+    return str << x.value();
 }
 
 #endif

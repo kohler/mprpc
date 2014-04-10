@@ -123,7 +123,7 @@ struct Vrview {
         unsigned ackno_count_;
         double ackno_changed_at_;
 
-        friend class Vrview;
+        friend struct Vrview;
     };
 
     viewnumber_t viewno;

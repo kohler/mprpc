@@ -48,7 +48,9 @@ class Json {
     };
 
   public:
-    struct null_t {null_t(){}};
+    struct null_t {
+        inline constexpr null_t() { }
+    };
     static const null_t null;
     static const Json null_json;
 
