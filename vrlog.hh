@@ -1,6 +1,7 @@
 #ifndef VRLOG_HH
 #define VRLOG_HH 1
 #include "json.hh"
+#include "msgpack.hh"
 #include "circular_int.hh"
 #include <iostream>
 #include <deque>
@@ -72,9 +73,12 @@ class Vrlog {
 
 
 inline bool operator==(const Vrlogitem& a, const Vrlogitem& b) {
-    return a.viewno == b.viewno && a.client_uid == b.client_uid
+    return a.viewno == b.viewno
+        && a.client_uid == b.client_uid
         && a.client_seqno == b.client_seqno
-        && a.request.unparse() == b.request.unparse();
+        && (a.request.is_primitive() || b.request.is_primitive()
+            ? a.request == b.request
+            : msgpack::unparse(a.request) == msgpack::unparse(b.request));
 }
 
 inline bool operator!=(const Vrlogitem& a, const Vrlogitem& b) {
