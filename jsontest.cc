@@ -562,6 +562,12 @@ int main(int argc, char** argv) {
         CHECK(a.size() == 4);
     }
 
+    {
+        Json a = Json::parse("[{\"a\":\"\\\"\\\\\\/\"}]");
+        CHECK(a[0]["a"] == "\"\\/");
+        CHECK(a.unparse() == "[{\"a\":\"\\\"\\\\\\/\"}]");
+    }
+
     std::cout << "All tests pass!\n";
     return 0;
 }

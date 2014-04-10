@@ -615,7 +615,9 @@ void Json::hard_unparse(StringAccum &sa, const unparse_manipulator &m, int depth
                     sa << upx[1];
 		if (expanded)
                     unparse_indent(sa, m, depth + 1);
-		sa << '\"' << ob->v_.first.encode_json() << '\"' << upx[0];
+		sa << '\"';
+                ob->v_.first.encode_json(sa);
+                sa << '\"' << upx[0];
 		ob->v_.second.hard_unparse(sa, m, depth + 1);
 		rest = true;
 	    }
@@ -641,9 +643,11 @@ void Json::hard_unparse(StringAccum &sa, const unparse_manipulator &m, int depth
 	sa << ']';
     } else if (u_.x.type == j_null && !u_.x.x)
         sa.append("null", 4);
-    else if (u_.x.type <= 0)
-	sa << '\"' << reinterpret_cast<const String&>(u_.str).encode_json() << '\"';
-    else if (u_.x.type == j_bool) {
+    else if (u_.x.type <= 0) {
+	sa << '\"';
+        reinterpret_cast<const String&>(u_.str).encode_json(sa);
+        sa << '\"';
+    } else if (u_.x.type == j_bool) {
         bool b = u_.i.x;
         sa.append(&"false\0true"[-b & 6], 5 - b);
     } else if (u_.x.type == j_int)
