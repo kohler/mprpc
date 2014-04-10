@@ -53,9 +53,6 @@ mpvr: mpvr.o vrlog.o logger.o mpfd.o string.o straccum.o json.o compiler.o msgpa
 mprpc: mprpc.o mpfd.o string.o straccum.o json.o compiler.o msgpack.o clp.o $(LIBTAMER)
 	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)
 
-paxos: paxos.o mpfd.o string.o straccum.o json.o compiler.o msgpack.o clp.o $(LIBTAMER)
-	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)
-
 jsontest: jsontest.o string.o straccum.o json.o compiler.o
 	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)
 
@@ -88,7 +85,7 @@ tamer-update:
 	cd tamer && $(MAKE) --no-print-directory compiler tamer
 
 clean:
-	rm -f mtd mtclient mttest test_string test_atomics *.o libjson.a
+	rm -f mpvr mprpc jsontest msgpacketst *.o libjson.a
 	rm -rf .deps
 
 DEPFILES := $(wildcard $(DEPSDIR)/*.d)
