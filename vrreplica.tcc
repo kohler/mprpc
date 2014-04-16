@@ -11,85 +11,10 @@
 #include <fstream>
 #include <tamer/channel.hh>
 
-static const String m_vri_request("req");
-    // seqno, request [, request]*
-static const String m_vri_response("res");
-    // [seqno, reply]*
-static const String m_vri_commit("commit");
-    // P->R: [3, xxx, viewno, commitno, decide_delta,
-    //        [logno, [view_delta, client_uid, client_seqno, request]*]]
-static const String m_vri_ack("ack");
-    // R->P: [3, xxx, viewno, storeno]
-static const String m_vri_handshake("handshake");
-    // [my_uid, your_uid, handshake_value]
-static const String m_vri_join("join");
-    // []
-static const String m_vri_view("view");
-    // view_object
-static const String m_vri_error("error");
-
 Vrconstants vrconstants;
 
-// Handshake protocol (clients + interconnect)
-
-tamed void handshake_protocol(Vrchannel* peer, bool active_end,
-                              double message_timeout, double timeout,
-                              tamer::event<bool> done) {
-    tamed {
-        Json msg;
-        String peer_uid = peer->remote_uid();
-        double start_time = tamer::drecent();
-    }
-
-    // handshake loop with retry
-    while (1) {
-        if (active_end) {
-            Json handshake_msg = Json::array(m_vri_handshake, Json::null,
-                                             peer->local_uid(), peer_uid,
-                                             peer->connection_uid());
-            log_send(peer) << handshake_msg << "\n";
-            peer->send(handshake_msg);
-        }
-        twait {
-            peer->receive(tamer::add_timeout(message_timeout,
-                                             make_event(msg),
-                                             Json(false)));
-        }
-        if (!msg.is_bool() || tamer::drecent() >= start_time + timeout)
-            break;
-    }
-
-    // test handshake message
-    if (!msg) { // null or false
-        log_receive(peer) << "handshake timeout\n";
-        done(false);
-    } else if (!(msg.is_a() && msg.size() >= 5 && msg[0] == m_vri_handshake
-                 && msg[2].is_s() && msg[4].is_s()
-                 && (msg[3].is_null()
-                     || (msg[3].is_s()
-                         && msg[3].to_s() == peer->local_uid())))) {
-        log_receive(peer) << "bad handshake " << msg << "\n";
-        done(false);
-    } else {
-        log_receive(peer) << msg << "\n";
-
-        // parse handshake and respond
-        String handshake_value = msg[4].to_s();
-        assert(!peer->connection_uid()
-               || peer->connection_uid() == handshake_value);
-        peer->set_connection_uid(handshake_value);
-        if (!active_end) {
-            msg[2].swap(msg[3]);
-            peer->send(msg);
-        }
-
-        done(true);
-    }
-}
-
-
 // Login protocol.
-//   message m_vri_hello:
+//   message Vrchannel::m_hello:
 //     request:  { group: GROUPNAME, uid: UID }
 //     response: { ok: true,
 //                 members: [ {addr: ADDR, port: PORT, uid: UID}... ],
@@ -416,7 +341,7 @@ tamed void Vrreplica::join(String peer_uid, event<> done) {
     assert(want_member_ && next_view_.size() == 1);
     while (next_view_.size() == 1) {
         if ((ep = endpoints_[peer_uid])) {
-            ep->send(Json::array(m_vri_join, Json::null));
+            ep->send(Json::array(Vrchannel::m_join, Json::null));
             twait {
                 at_view(next_view_.viewno + 1,
                         tamer::add_timeout(k_.message_timeout, make_event()));
@@ -436,8 +361,8 @@ tamed void Vrreplica::connection_handshake(Vrchannel* peer, bool active_end) {
     tamed { bool ok = false; }
 
     twait {
-        handshake_protocol(peer, active_end, k_.message_timeout,
-                           k_.handshake_timeout, make_event(ok));
+        peer->handshake(active_end, k_.message_timeout,
+                        k_.handshake_timeout, make_event(ok));
     }
 
     String peer_uid = peer->remote_uid();
@@ -473,17 +398,17 @@ tamed void Vrreplica::connection_loop(Vrchannel* peer) {
         if (stopped_) // ignore message
             continue;
         log_receive(peer) << msg << " " << unparse_view_state() << "\n";
-        if (msg[0] == m_vri_handshake)
-            peer->send(msg);
-        else if (msg[0] == m_vri_request)
+        if (msg[0] == Vrchannel::m_handshake)
+            peer->process_handshake(msg, true);
+        else if (msg[0] == Vrchannel::m_request)
             process_request(peer, msg);
-        else if (msg[0] == m_vri_commit)
+        else if (msg[0] == Vrchannel::m_commit)
             process_commit(peer, msg);
-        else if (msg[0] == m_vri_ack)
+        else if (msg[0] == Vrchannel::m_ack)
             process_ack(peer, msg);
-        else if (msg[0] == m_vri_join)
+        else if (msg[0] == Vrchannel::m_join)
             process_join(peer, msg);
-        else if (msg[0] == m_vri_view)
+        else if (msg[0] == Vrchannel::m_view)
             process_view(peer, msg);
     }
 
@@ -519,7 +444,7 @@ void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
     Vrview v;
     if (!v.assign(payload, uid())
         || !v.count(who->remote_uid())) {
-        who->send(Json::array(m_vri_error, -msg[1]));
+        who->send(Json::array(Vrchannel::m_error, -msg[1]));
         return;
     }
 
@@ -727,7 +652,7 @@ tamed void Vrreplica::send_peer(String peer_uid, Json msg) {
 void Vrreplica::send_view(Vrchannel* who, Json payload, Json seqno) {
     if (!payload.get("members"))
         payload.merge(view_payload(who->remote_uid()));
-    Json msg = Json::array(m_vri_view, seqno, payload);
+    Json msg = Json::array(Vrchannel::m_view, seqno, payload);
     who->send(msg);
     log_send(who) << msg << " " << unparse_view_state() << "\n";
 }
@@ -782,7 +707,7 @@ tamed void Vrreplica::start_view_change() {
 
 void Vrreplica::process_request(Vrchannel* who, const Json& msg) {
     if (msg.size() < 4 || !msg[2].is_i()) {
-        who->send(Json::array(m_vri_error, msg[1], false));
+        who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
     } else if (!is_primary() || between_views()) {
         send_view(who, Json(), msg[1]);
@@ -815,7 +740,7 @@ void Vrreplica::process_request(Vrchannel* who, const Json& msg) {
 }
 
 Json Vrreplica::commit_log_message(lognumber_t first, lognumber_t last) const {
-    Json msg = Json::array(m_vri_commit,
+    Json msg = Json::array(Vrchannel::m_commit,
                            Json::null,
                            cur_view_.viewno.value(),
                            commitno_.value(),
@@ -846,7 +771,7 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
         || !msg[2].is_u()
         || !msg[3].is_u()
         || (msg.size() > 4 && !msg[4].is_u())) {
-        who->send(Json::array(m_vri_error, msg[1], false));
+        who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
     }
 
@@ -905,7 +830,7 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
     }
 
     if (msg.size() > 6 || ackno_ != old_ackno) {
-        Json ack_msg = Json::array(m_vri_ack,
+        Json ack_msg = Json::array(Vrchannel::m_ack,
                                    Json::null,
                                    cur_view_.viewno.value(),
                                    ackno_.value(),
@@ -949,7 +874,7 @@ void Vrreplica::process_ack(Vrchannel* who, const Json& msg) {
     if (msg.size() < 4
         || !msg[2].is_u()
         || !msg[3].is_u()) {
-        who->send(Json::array(m_vri_error, msg[1], false));
+        who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
     } else if (msg[2].to_u() != cur_view_.viewno
                || between_views()
@@ -999,7 +924,7 @@ void Vrreplica::process_ack_update_commitno(lognumber_t new_commitno) {
         Vrlogitem& li = log_[old_commitno];
         Json& msg = messages[li.client_uid];
         if (!msg)
-            msg = Json::array(m_vri_response, Json::null);
+            msg = Json::array(Vrchannel::m_response, Json::null);
         msg.push_back(li.client_seqno).push_back(li.response);
         ++old_commitno;
     }
@@ -1074,7 +999,7 @@ tamed void Vrclient::request(Json req, event<Json> done) {
     at_response_.push_back(std::make_pair(my_seqno, done));
     while (done) {
         if (channel_)
-            channel_->send(Json::array(m_vri_request,
+            channel_->send(Json::array(Vrchannel::m_request,
                                        Json::null,
                                        my_seqno,
                                        req));
@@ -1094,11 +1019,11 @@ tamed void Vrclient::connection_loop(Vrchannel* peer) {
         if (stopped_) // ignore message
             continue;
         log_receive(peer) << msg << "\n";
-        if (msg[0] == m_vri_handshake)
-            peer->send(msg);
-        else if (msg[0] == m_vri_response)
+        if (msg[0] == Vrchannel::m_handshake)
+            peer->process_handshake(msg, true);
+        else if (msg[0] == Vrchannel::m_response)
             process_response(msg);
-        else if (msg[0] == m_vri_view)
+        else if (msg[0] == Vrchannel::m_view)
             process_view(msg);
     }
 
@@ -1141,8 +1066,8 @@ tamed void Vrclient::connect(String peer_uid, Json peer_name, event<> done) {
 
         if (peer) {
             peer->set_connection_uid(Vrchannel::random_uid(rg_));
-            twait { handshake_protocol(peer, true, vrconstants.message_timeout,
-                                       10000, make_event(ok)); }
+            twait { peer->handshake(true, vrconstants.message_timeout,
+                                    10000, make_event(ok)); }
         }
 
         if (peer && ok) {

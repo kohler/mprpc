@@ -102,6 +102,7 @@ mprpc.o: $(TAMEDDIR)/mprpc.cc $(MPVR_HEADERS)
 vrreplica.o: $(TAMEDDIR)/vrreplica.cc $(MPVR_HEADERS)
 vrtest.o: $(TAMEDDIR)/vrtest.cc $(MPVR_HEADERS)
 vrmain.o: $(TAMEDDIR)/vrmain.cc $(MPVR_HEADERS)
+vrchannel.o: $(TAMEDDIR)/vrchannel.cc $(MPVR_HEADERS)
 
 always:
 	@:
