@@ -1180,6 +1180,9 @@ class Json_proxy_base {
     bool assign_parse(const char* first, const char* last) {
 	return value().assign_parse(first, last);
     }
+    void swap(Json& x) {
+        value().swap(x);
+    }
     Json& operator++() {
 	return ++value();
     }
