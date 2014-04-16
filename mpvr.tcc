@@ -36,12 +36,12 @@ String random_string(std::mt19937& rg) {
     return String((char*) &x, 6).encode_base64();
 }
 
-String Vrchannel::make_replica_uid() {
+String make_replica_uid() {
     static int counter;
     return String("n") + String(counter++);
 }
 
-String Vrchannel::make_client_uid() {
+String make_client_uid() {
     static int counter;
     return String("c") + String(counter++);
 }
@@ -325,8 +325,9 @@ bool Vrview::account_all_acks() {
 
 
 
-Vrreplica::Vrreplica(const String& group_name, Vrchannel* me, std::mt19937& rg)
-    : group_name_(group_name), want_member_(!!me), me_(me),
+Vrreplica::Vrreplica(const String& group_name, Vrstate* state,
+                     Vrchannel* me, std::mt19937& rg)
+    : group_name_(group_name), state_(state), want_member_(!!me), me_(me),
       decideno_(0), commitno_(0), ackno_(0), sackno_(0),
       stopped_(false), commit_sent_at_(0),
       rg_(rg) {
@@ -895,25 +896,23 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
 
     lognumber_t commitno = msg[3].to_u();
     lognumber_t decideno = commitno - msg[4].to_u();
-    lognumber_t old_ackno = ackno_;
-    // decideno indicates that all replicas, including us, agree. Use it to
-    // advance commitno_. (Retransmitted commits won't work before decideno,
-    // because others may have truncated their logs.)
-    // NB might have decideno < first_logno() near view changes!
     assert(decideno <= last_logno());
-    commitno_ = std::max(commitno_, decideno);
+    lognumber_t old_ackno = ackno_;
     ackno_ = std::max(ackno_, decideno);
     sackno_ = std::max(sackno_, decideno);
 
     if (msg.size() > 6)
         process_commit_log(msg);
 
+    // decideno indicates that all replicas, including us, agree. Use it to
+    // advance commitno. (Retransmitted commits won't work before decideno,
+    // because others may have truncated their logs: they know we have the
+    // commits.) NB might have decideno < first_logno() near view changes!
+    commitno = std::max(commitno, decideno);
     if (commitno > commitno_
         && commitno >= ackno_
-        && commitno <= last_logno()) {
-        commitno_ = commitno;
-        process_at_number(commitno_, at_commit_);
-    }
+        && commitno <= last_logno())
+        update_commitno(commitno);
 
     if (decideno > decideno_
         && decideno <= commitno_) {
@@ -999,17 +998,28 @@ void Vrreplica::process_ack(Vrchannel* who, const Json& msg) {
         send_commit_log(peer, ackno, ackno + msg[4].to_u());
 }
 
-void Vrreplica::process_ack_update_commitno(lognumber_t commitno) {
+void Vrreplica::update_commitno(lognumber_t new_commitno) {
+    assert(commitno_ <= new_commitno && new_commitno <= last_logno());
+    while (commitno_ != new_commitno) {
+        Vrlogitem& li = log_[commitno_];
+        li.response = state_->commit(li.request);
+        ++commitno_;
+    }
+    process_at_number(commitno_, at_commit_);
+}
+
+void Vrreplica::process_ack_update_commitno(lognumber_t new_commitno) {
+    lognumber_t old_commitno = commitno_;
+    update_commitno(new_commitno);
     std::unordered_map<String, Json> messages;
-    for (size_t i = commitno_.value(); i != commitno.value(); ++i) {
-        Vrlogitem& li = log_[i];
+    while (old_commitno != new_commitno) {
+        Vrlogitem& li = log_[old_commitno];
         Json& msg = messages[li.client_uid];
         if (!msg)
             msg = Json::array(m_vri_response, Json::null);
-        msg.push_back(li.client_seqno).push_back(li.request);
+        msg.push_back(li.client_seqno).push_back(li.response);
+        ++old_commitno;
     }
-    commitno_ = commitno;
-    process_at_number(commitno_, at_commit_);
     for (auto it = messages.begin(); it != messages.end(); ++it) {
         Vrchannel* ep = endpoints_[it->first];
         if (ep) {
@@ -1210,6 +1220,7 @@ class Vrclient;
 
 class Vrtestcollection {
   public:
+    Vrstate* state_;
     std::set<Vrtestchannel*> channels_;
     mutable std::mt19937 rg_;
 
@@ -1328,7 +1339,7 @@ Vrreplica* Vrtestcollection::add_replica(const String& uid) {
     assert(testnodes_.find(uid) == testnodes_.end());
     Vrtestnode* tn = new Vrtestnode(uid, this);
     testnodes_[uid] = tn;
-    Vrreplica* r = new Vrreplica(tn->uid(), tn->listener(), rg_);
+    Vrreplica* r = new Vrreplica(tn->uid(), state_, tn->listener(), rg_);
     replica_map_[uid] = r;
     replicas_.push_back(r);
     std::sort(replicas_.begin(), replicas_.end(), [](Vrreplica* a, Vrreplica* b) {
@@ -1467,8 +1478,8 @@ void Vrtestlistener::receive_connection(event<Vrchannel*> done) {
 
 
 Vrtestcollection::Vrtestcollection(unsigned seed, double loss_p)
-    : rg_(seed), loss_p_(loss_p), decideno_(0),
-      commitno_(0) {
+    : state_(new Vrstate), rg_(seed), loss_p_(loss_p),
+      decideno_(0), commitno_(0) {
 }
 
 void Vrtestcollection::print_lognos() const {
@@ -1592,7 +1603,7 @@ void Vrtestcollection::check() {
             const Vrlogitem& li = r->log_entry(first);
             const Vrlogitem& cli = committed_log_[first];
             if (li.is_real()) {
-                assert(cli.viewno != li.viewno || cli == li);
+                assert(cli.viewno != li.viewno || cli.request_equals(li));
                 if (first < commit_counts.last()
                     && cli.viewno == li.viewno)
                     ++commit_counts[first];
@@ -1671,7 +1682,7 @@ tamed void go(Vrtestcollection& vrg, std::vector<Vrreplica*>& nodes) {
     for (unsigned i = 0; i < nodes.size(); ++i)
         nodes[i]->dump(std::cout);
 
-    client = vrg.add_client(Vrchannel::make_client_uid());
+    client = vrg.add_client(make_client_uid());
     twait { client->connect(nodes[0]->uid(), make_event()); }
     many_requests(client);
     twait { tamer::at_delay_usec(10000, make_event()); }
@@ -1724,7 +1735,7 @@ int main(int argc, char** argv) {
     Vrtestcollection vrg(seed, loss_p);
     std::vector<Vrreplica*> nodes;
     for (unsigned i = 0; i < n; ++i)
-        nodes.push_back(vrg.add_replica(Vrchannel::make_replica_uid()));
+        nodes.push_back(vrg.add_replica(make_replica_uid()));
 
     go(vrg, nodes);
 

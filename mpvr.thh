@@ -8,6 +8,18 @@
 #include <iostream>
 using tamer::event;
 
+class Vrstate {
+  public:
+    inline Vrstate() {
+    }
+    virtual ~Vrstate() {
+    }
+
+    virtual Json commit(Json x) {
+        return x;
+    }
+};
+
 class Vrchannel {
   public:
     inline Vrchannel(String local_uid, String remote_uid)
@@ -34,9 +46,6 @@ class Vrchannel {
     }
     virtual Json local_name() const;
     virtual Json remote_name() const;
-
-    static String make_client_uid();
-    static String make_replica_uid();
 
     virtual void connect(String peer_uid, Json peer_name,
                          event<Vrchannel*> done);
@@ -185,7 +194,8 @@ inline bool operator!=(const Vrview& a, const Vrview& b) {
 
 class Vrreplica {
   public:
-    Vrreplica(const String& group_name, Vrchannel* me, std::mt19937& rg);
+    Vrreplica(const String& group_name, Vrstate* state,
+              Vrchannel* me, std::mt19937& rg);
 
     String group_name() const {
         return group_name_;
@@ -238,6 +248,7 @@ class Vrreplica {
 
   private:
     String group_name_;
+    Vrstate *state_;
 
     typedef Vrview view_type;
     view_type cur_view_;
@@ -310,7 +321,8 @@ class Vrreplica {
     void send_commit_log(Vrview::member_type* peer,
                          lognumber_t first, lognumber_t last);
     void process_ack(Vrchannel* who, const Json& msg);
-    void process_ack_update_commitno(lognumber_t commitno);
+    void update_commitno(lognumber_t new_commitno);
+    void process_ack_update_commitno(lognumber_t new_commitno);
 
     template <typename T> void process_at_number(T number, std::deque<std::pair<T, tamer::event<> > >& list);
 

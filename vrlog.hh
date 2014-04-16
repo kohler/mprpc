@@ -16,6 +16,7 @@ struct Vrlogitem {
     String client_uid;
     unsigned client_seqno;
     Json request;
+    Json response;
 
     Vrlogitem() {
     }
@@ -26,6 +27,7 @@ struct Vrlogitem {
     bool is_real() const {
         return client_uid;
     }
+    inline bool request_equals(const Vrlogitem& x) const;
 };
 
 
@@ -72,17 +74,14 @@ class Vrlog {
 };
 
 
-inline bool operator==(const Vrlogitem& a, const Vrlogitem& b) {
-    return a.viewno == b.viewno
-        && a.client_uid == b.client_uid
-        && a.client_seqno == b.client_seqno
-        && (a.request.is_primitive() || b.request.is_primitive()
-            ? a.request == b.request
-            : msgpack::unparse(a.request) == msgpack::unparse(b.request));
-}
-
-inline bool operator!=(const Vrlogitem& a, const Vrlogitem& b) {
-    return !(a == b);
+inline bool Vrlogitem::request_equals(const Vrlogitem& x) const {
+    return is_real()
+        && viewno == x.viewno
+        && client_uid == x.client_uid
+        && client_seqno == x.client_seqno
+        && (request.is_primitive() || x.request.is_primitive()
+            ? request == x.request
+            : msgpack::unparse(request) == msgpack::unparse(x.request));
 }
 
 std::ostream& operator<<(std::ostream& str, const Vrlogitem& x);
