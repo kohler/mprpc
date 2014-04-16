@@ -47,7 +47,9 @@ $(TAMEDDIR)/%.hh: %.thh config.h $(DEPSDIR)/stamp $(TAMER)
 %.S: %.o
 	objdump -S $< > $@
 
-mpvr: mpvr.o vrlog.o logger.o mpfd.o string.o straccum.o json.o compiler.o msgpack.o clp.o $(LIBTAMER)
+mpvr: vrreplica.o vrtest.o vrmain.o vrlog.o vrchannel.o logger.o mpfd.o \
+		string.o straccum.o json.o compiler.o msgpack.o clp.o \
+		$(LIBTAMER)
 	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 mprpc: mprpc.o mpfd.o string.o straccum.o json.o compiler.o msgpack.o clp.o $(LIBTAMER)
@@ -94,9 +96,12 @@ include $(DEPFILES)
 endif
 
 # tamer dependencies
-mpfd.o: $(TAMEDDIR)/mpfd.hh $(TAMEDDIR)/mpfd.cc
-mprpc.o: $(TAMEDDIR)/mpfd.hh $(TAMEDDIR)/mprpc.cc
-mpvr.o: $(TAMEDDIR)/mpvr.cc $(TAMEDDIR)/mpvr.hh $(TAMEDDIR)/mpfd.hh
+MPVR_HEADERS = $(addprefix $(TAMEDDIR)/,mpfd.hh vrreplica.hh vrtest.hh)
+mpfd.o: $(TAMEDDIR)/mpfd.cc $(MPVR_HEADERS)
+mprpc.o: $(TAMEDDIR)/mprpc.cc $(MPVR_HEADERS)
+vrreplica.o: $(TAMEDDIR)/vrreplica.cc $(MPVR_HEADERS)
+vrtest.o: $(TAMEDDIR)/vrtest.cc $(MPVR_HEADERS)
+vrmain.o: $(TAMEDDIR)/vrmain.cc $(MPVR_HEADERS)
 
 always:
 	@:
