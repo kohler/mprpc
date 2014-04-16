@@ -88,7 +88,7 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
 
     ch->connecting = true;
     ch->wait = std::move(done);
-    ch->backoff = 0.001;
+    ch->backoff = 0.05;
 
     // random delay to reduce likelihood of simultaneous connection,
     // which we currently handle poorly
@@ -102,7 +102,7 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
     if (!ch->name)
         ch->name = Json::object("uid", peer_uid);
 
-    while (!ch->c && ch->backoff < 10) {
+    while (!ch->c && ch->wait) {
         log_connection(uid(), peer_uid) << "connecting\n";
         twait { me_->connect(peer_uid, ch->name, make_event(peer)); }
         if (peer) {
@@ -111,7 +111,7 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
             twait { connection_handshake(peer, true, make_event()); }
         } else {
             twait { tamer::at_delay(ch->backoff, make_event()); }
-            ch->backoff *= 2;
+            ch->backoff = std::min(ch->backoff * 2, 10.0);
         }
     }
 
