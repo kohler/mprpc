@@ -957,8 +957,6 @@ Json::streaming_parser::consume_stringpart(StringAccum& sa,
                                            const uint8_t* last) {
     while ((state_ & st_partlenmask) && first != last) {
         int part = state_ & st_partlenmask;
-        if (part > sa.length())
-            std::cerr << "fuck " << sa.length() << " " << part << "\n";
         uint8_t tag = sa[sa.length() - part];
         if ((tag != '\\' && (*first & 0xC0) != 0x80)
             || (tag == '\\' && part == 6 && *first != '\\')
