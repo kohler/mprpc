@@ -156,6 +156,9 @@ class Vrreplica {
     void process_view_transfer_log(Vrchannel* who, Json& payload);
     void process_view_check_log(Vrchannel* who, Json& payload);
     void process_request(Vrchannel* who, const Json& msg);
+    bool check_retransmitted_request(const String& client_uid,
+                                     unsigned client_seqno,
+                                     Json& response) const;
     void process_commit(Vrchannel* who, const Json& msg);
     void process_commit_log(const Json& msg);
     Json commit_log_message(lognumber_t first, lognumber_t last) const;

@@ -13,14 +13,20 @@ Vrclient::~Vrclient() {
 }
 
 tamed void Vrclient::request(Json req, tamer::event<Json> done) {
-    tamed { unsigned my_seqno = ++client_seqno_; }
+    tamed {
+        unsigned my_seqno = ++client_seqno_;
+        bool retransmit = false;
+    }
     at_response_.push_back(std::make_pair(my_seqno, done));
     while (done) {
-        if (channel_)
+        if (channel_) {
             channel_->send(Json::array(Vrchannel::m_request,
                                        Json::null,
+                                       retransmit,
                                        my_seqno,
                                        req));
+            retransmit = true;
+        }
         twait { tamer::at_delay(vrconstants.client_message_timeout,
                                 tamer::make_event()); }
     }

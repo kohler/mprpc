@@ -489,7 +489,9 @@ tamed void Vrreplica::start_view_change() {
 }
 
 void Vrreplica::process_request(Vrchannel* who, const Json& msg) {
-    if (msg.size() < 4 || !msg[2].is_i()) {
+    bool retransmit = msg[2].is_b() && msg[2];
+    int seqno_offset = msg[2].is_b() ? 3 : 2;
+    if (msg.size() <= seqno_offset || !msg[seqno_offset].is_u()) {
         who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
     } else if (!is_primary() || between_views()) {
@@ -498,14 +500,18 @@ void Vrreplica::process_request(Vrchannel* who, const Json& msg) {
     }
 
     // add request to our log
+    String client_uid = who->remote_uid();
+    unsigned client_seqno = msg[seqno_offset].to_u();
     lognumber_t from_storeno = last_logno();
-    unsigned seqno = msg[2].to_u64();
-    for (int i = 3; i != msg.size(); ++i, ++seqno)
-        log_.emplace_back(cur_view_.viewno, who->remote_uid(),
-                          seqno, msg[i]);
+    Json response;
+    for (int i = seqno_offset + 1; i != msg.size(); ++i, ++client_seqno)
+        if (!retransmit
+            || !check_retransmitted_request(client_uid, client_seqno, response))
+            log_.emplace_back(cur_view_.viewno, client_uid, client_seqno,
+                              msg[i]);
     process_at_number(from_storeno, at_store_);
 
-    // broadcast commit to backups
+    // broadcast request to backups
     Json commit_msg = commit_log_message(from_storeno, last_logno());
     for (auto it = cur_view_.members.begin();
          it != cur_view_.members.end(); ++it)
@@ -518,8 +524,32 @@ void Vrreplica::process_request(Vrchannel* who, const Json& msg) {
             send_commit_log(&*it, it->ackno(), last_logno());
     commit_sent_at_ = tamer::drecent();
 
-    // the new commits are replicated only here
+    // the new requests are replicated only here
     cur_view_.account_ack(&cur_view_.primary(), last_logno());
+
+    // perhaps there is a response to a retransmitted request
+    if (response) {
+        log_send(who) << response << "\n";
+        who->send(std::move(response));
+    }
+}
+
+bool Vrreplica::check_retransmitted_request(const String& client_uid,
+                                            unsigned client_seqno,
+                                            Json& response) const {
+    for (auto i = first_logno(); i != last_logno(); ++i) {
+        const Vrlogitem& li = log_[i];
+        if (li.client_uid == client_uid
+            && li.client_seqno == client_seqno) {
+            if (i < commitno_) {
+                if (!response)
+                    response = Json::array(Vrchannel::m_response, Json::null);
+                response.push_back_list(client_seqno, li.response);
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 Json Vrreplica::commit_log_message(lognumber_t first, lognumber_t last) const {
@@ -702,15 +732,17 @@ void Vrreplica::update_commitno(lognumber_t new_commitno) {
 void Vrreplica::process_ack_update_commitno(lognumber_t new_commitno) {
     lognumber_t old_commitno = commitno_;
     update_commitno(new_commitno);
+
     std::unordered_map<String, Json> messages;
     while (old_commitno != new_commitno) {
         Vrlogitem& li = log_[old_commitno];
         Json& msg = messages[li.client_uid];
         if (!msg)
             msg = Json::array(Vrchannel::m_response, Json::null);
-        msg.push_back(li.client_seqno).push_back(li.response);
+        msg.push_back_list(li.client_seqno, li.response);
         ++old_commitno;
     }
+
     for (auto it = messages.begin(); it != messages.end(); ++it) {
         if (Vrchannel* ep = channels_[it->first].c) {
             log_send(ep) << it->second << "\n";
