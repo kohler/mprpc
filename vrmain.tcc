@@ -2,6 +2,7 @@
 #include "vrtest.hh"
 #include "vrnetchannel.hh"
 #include "vrreplica.hh"
+#include "vrclient.hh"
 #include "clp.h"
 
 Logger logger(std::cout);

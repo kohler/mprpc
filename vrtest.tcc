@@ -1,6 +1,7 @@
 // -*- mode: c++ -*-
 #include "vrtest.hh"
 #include "vrreplica.hh"
+#include "vrclient.hh"
 #include <algorithm>
 
 Vrtestnode::Vrtestnode(const String& uid, Vrtestcollection* collection)

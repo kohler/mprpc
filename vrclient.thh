@@ -1,0 +1,43 @@
+// -*- mode: c++ -*-
+#ifndef VRCLIENT_THH
+#define VRCLIENT_THH 1
+#include "vrview.hh"
+#include <tamer/tamer.hh>
+#include <deque>
+#include <random>
+class Vrchannel;
+
+class Vrclient {
+  public:
+    Vrclient(Vrchannel* me, std::mt19937& rg);
+    ~Vrclient();
+
+    tamed void connect(String peer_uid, Json peer_name, tamer::event<> done);
+    inline void connect(String peer_uid, tamer::event<> done);
+    tamed void request(Json req, tamer::event<Json> done);
+    inline void request(Json req, tamer::event<> done);
+
+  private:
+    String uid_;
+    unsigned client_seqno_;
+    Vrchannel* me_;
+    Vrchannel* channel_;
+    Vrview view_;
+    bool stopped_;
+    std::deque<std::pair<unsigned, tamer::event<Json> > > at_response_;
+    std::mt19937& rg_;
+
+    tamed void connection_loop(Vrchannel* peer);
+    void process_response(Json msg);
+    void process_view(Json msg);
+};
+
+inline void Vrclient::connect(String peer_uid, tamer::event<> done) {
+    connect(peer_uid, Json::object("uid", peer_uid), done);
+}
+
+inline void Vrclient::request(Json req, tamer::event<> done) {
+    request(std::move(req), tamer::rebind<Json>(done));
+}
+
+#endif
