@@ -3,25 +3,34 @@
 #include "vrchannel.hh"
 
 Vrclient::Vrclient(Vrchannel* me, Json config, std::mt19937& rg)
-    : uid_(Vrchannel::random_uid(rg)), client_seqno_(1), me_(me),
-      channel_(nullptr), stopped_(false), rg_(rg) {
+    : client_seqno_(1), channel_(nullptr), me_(me), stopped_(false), rg_(rg) {
     bool ok = view_.parse(config, false, String());
     assert(ok);
-    std::cerr << "CLIENT GOT " << view_.members_json() << "\n";
+    merge_view_peer_names();
 }
 
 Vrclient::~Vrclient() {
     for (auto it = at_response_.begin(); it != at_response_.end(); ++it)
         it->second.unblock();
+    delete channel_;
+    delete me_;
+    at_view_change_();
+}
+
+void Vrclient::merge_view_peer_names() {
+    for (auto it = view_.members.begin(); it != view_.members.end(); ++it)
+        if (it->peer_name)
+            peer_names_[it->uid] = it->peer_name;
 }
 
 tamed void Vrclient::request(Json req, tamer::event<Json> done) {
     tamed {
         unsigned my_seqno = ++client_seqno_;
         bool retransmit = false;
+        tamer::ref_monitor mon(ref_);
     }
     at_response_.push_back(std::make_pair(my_seqno, done));
-    while (done) {
+    while (done && mon) {
         if (channel_) {
             channel_->send(Json::array(Vrchannel::m_request,
                                        Json::null,
@@ -30,13 +39,19 @@ tamed void Vrclient::request(Json req, tamer::event<Json> done) {
                                        req));
             retransmit = true;
         }
-        twait { tamer::at_delay(vrconstants.client_message_timeout,
-                                tamer::make_event()); }
+        twait {
+            tamer::event<> e = tamer::make_event();
+            at_view_change_ += e;
+            tamer::at_delay(vrconstants.client_message_timeout, e);
+        }
     }
 }
 
 tamed void Vrclient::connection_loop(Vrchannel* peer) {
-    tamed { Json msg; }
+    tamed {
+        Json msg;
+        tamer::ref_monitor mon(ref_);
+    }
 
     while (peer == channel_) {
         msg.clear();
@@ -54,10 +69,12 @@ tamed void Vrclient::connection_loop(Vrchannel* peer) {
             process_view(msg);
     }
 
-    log_connection(peer) << "connection closed\n";
-    delete peer;
-    if (peer == channel_)
-        channel_ = nullptr;
+    if (mon) {
+        log_connection(peer) << "connection closed\n";
+        delete peer;
+        if (peer == channel_)
+            channel_ = nullptr;
+    }
 }
 
 void Vrclient::process_response(Json msg) {
@@ -77,11 +94,12 @@ void Vrclient::process_view(Json msg) {
     Vrview view;
     if (view.parse(msg[2], true, String())) {
         std::swap(view_, view);
+        merge_view_peer_names();
         if (!channel_ || view_.primary().uid != channel_->remote_uid()) {
             if (channel_)
                 channel_->close();
             channel_ = nullptr;
-            connect(tamer::event<>());
+            connect(at_view_change_);
         }
     }
 }
@@ -100,6 +118,8 @@ tamed void Vrclient::connect(tamer::event<> done) {
         Vrchannel* peer;
         bool ok;
         int tries = 0;
+        tamer::rendezvous<> r;
+        tamer::ref_monitor mon(ref_);
     }
 
     if (view_.primary_index >= 0)
@@ -107,13 +127,16 @@ tamed void Vrclient::connect(tamer::event<> done) {
     else
         peer_uid = random_replica_uid();
 
-    while (1) {
+    while (mon) {
         peer = nullptr;
         ok = false;
+        // every 8th try, look for someone else
+        ++tries;
+        if (tries % 8 == 7 && view_.size())
+            peer_uid = random_replica_uid();
 
         twait {
-            me_->connect(peer_uid,
-                         view_.find_pointer(peer_uid)->peer_name,
+            me_->connect(peer_uid, peer_names_[peer_uid],
                          tamer::make_event(peer));
         }
 
@@ -131,9 +154,5 @@ tamed void Vrclient::connect(tamer::event<> done) {
         }
 
         delete peer;
-        // every 8th try, look for someone else
-        ++tries;
-        if (tries % 8 == 7 && view_.size())
-            peer_uid = random_replica_uid();
     }
 }

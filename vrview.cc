@@ -50,28 +50,42 @@ bool Vrview::parse(Json msg, bool require_view, const String& my_uid) {
     nacked = nconfirmed = 0;
 
     std::unordered_map<String, int> seen_uids;
-    String uid;
     int itindex = 0;
     for (auto it = membersj.begin(); it != membersj.end(); ++it, ++itindex) {
+        // ugh, want to support the following formats for members:
+        // ["uid", {"uid": "foo"}] and {"uid": true}
+        // requires hoop jumping
         Json peer_name = it->second;
         if (peer_name.is_string())
             peer_name = Json::object("uid", std::move(peer_name));
-        if (!peer_name.is_object())
+        else if (peer_name.is_b())
+            peer_name = Json();
+        if (peer_name && !peer_name.is_o())
             return false;
-        if (!peer_name.count("uid")
-            && !it->first.empty()
-            && !isdigit((unsigned char) it->first[0]))
-            peer_name["uid"] = it->first;
-        if (!peer_name.get("uid").is_string()
-            || !(uid = peer_name.get("uid").to_s())
-            || seen_uids.find(uid) != seen_uids.end())
+
+        String peer_uid;
+        if (membersj.is_o())
+            peer_uid = it->first;
+        else if (peer_name.is_o() && peer_name["uid"].is_s())
+            peer_uid = peer_name["uid"].to_s();
+        if (peer_uid.empty()
+            || (peer_name && peer_name["uid"] && peer_name["uid"] != peer_uid)
+            || seen_uids.count(peer_uid))
             return false;
-        seen_uids[uid] = 1;
-        if (uid == my_uid)
+
+        if (peer_name.is_o()
+            && (peer_name.empty()
+                || (peer_name.size() == 1
+                    && peer_name.count("uid"))))
+            peer_name = Json();
+        members.push_back(member_type(std::move(peer_uid),
+                                      std::move(peer_name)));
+
+        if (peer_uid == my_uid)
             my_index = itindex;
-        if (primary_name && uid == primary_name)
+        if (primary_name && peer_uid == primary_name)
             primary_index = itindex;
-        members.push_back(member_type(uid, std::move(peer_name)));
+        seen_uids[peer_uid] = 1;
     }
 
     if ((primary_index < 0 && (require_view || primary_name))

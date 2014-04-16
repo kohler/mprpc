@@ -13,8 +13,12 @@ struct Vrview {
             : uid(std::move(peer_uid)), peer_name(std::move(peer_name)),
               acked(false), confirmed(false),
               has_ackno_(false), has_matching_logno_(false), ackno_count_(0) {
-            assert(!this->peer_name["uid"] || this->peer_name["uid"] == uid);
-            this->peer_name["uid"] = this->uid;
+            if (this->peer_name.is_o() && this->peer_name.empty())
+                this->peer_name = Json();
+            if (this->peer_name.is_o() && !this->peer_name["uid"])
+                this->peer_name["uid"] = uid;
+            if (this->peer_name.is_o() && this->peer_name["uid"])
+                assert(this->peer_name["uid"] == uid);
         }
 
         bool has_ackno() const {
@@ -116,7 +120,7 @@ inline Vrview::member_type* Vrview::find_pointer(const String& uid) {
 inline Json Vrview::members_json() const {
     Json j = Json::array();
     for (auto it = members.begin(); it != members.end(); ++it)
-        if (it->peer_name.size() == 1)
+        if (!it->peer_name)
             j.push_back(it->uid);
         else
             j.push_back(it->peer_name);

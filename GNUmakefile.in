@@ -17,7 +17,7 @@ LIBS = $(LIBTAMER) `$(TAMER) -l` @LIBS@ -lpthread -lm
 LDFLAGS = @LDFLAGS@
 
 TAMEDDIR = $(DEPSDIR)
-TAMER_COMMIT = 799ead40d506db264ffee9868c5fbd73518f3ecd
+TAMER_COMMIT = 6f9604d512ea492352a067ab1758c829f5ab5cee
 
 CXXCOMPILE = $(CXX) $(DEFS) $(CPPFLAGS) $(CXXFLAGS)
 CXXLINK = $(CXX) $(CXXFLAGS)
@@ -86,6 +86,7 @@ $(TAMER) $(LIBTAMER): tamer-update
 
 tamer-update:
 	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status tamer | head -c 41 | tail -c +2` && if test "$$cur" != $(TAMER_COMMIT) && test -z `cd tamer; git rev-list -n1 $(TAMER_COMMIT)..HEAD 2>/dev/null`; then (echo Updating tamer... 1>&2; cd tamer; git checkout -f master >/dev/null; git reset --hard $(TAMER_COMMIT) || exit; cd ..; git submodule update tamer); fi
+	@-test -f tamer/http-parser/http_parser.h || (cd tamer; git submodule init; git submodule update)
 	cd tamer && $(MAKE) --no-print-directory compiler tamer
 
 clean:

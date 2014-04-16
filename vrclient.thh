@@ -3,6 +3,7 @@
 #define VRCLIENT_THH 1
 #include "vrview.hh"
 #include <tamer/tamer.hh>
+#include <tamer/ref.hh>
 #include <deque>
 #include <random>
 class Vrchannel;
@@ -17,18 +18,21 @@ class Vrclient {
     inline void request(Json req, tamer::event<> done);
 
   private:
-    String uid_;
     unsigned client_seqno_;
-    Vrchannel* me_;
+    tamer::event<> at_view_change_;
     Vrchannel* channel_;
+    Vrchannel* me_;
     Vrview view_;
+    Json peer_names_;
     bool stopped_;
     std::deque<std::pair<unsigned, tamer::event<Json> > > at_response_;
     std::mt19937& rg_;
+    tamer::ref ref_;
 
     tamed void connection_loop(Vrchannel* peer);
     void process_response(Json msg);
     void process_view(Json msg);
+    void merge_view_peer_names();
     inline String random_replica_uid() const;
 };
 

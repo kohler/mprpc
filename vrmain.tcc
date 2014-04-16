@@ -127,6 +127,7 @@ tamed void run_fsclientreq(Vrclient* client, Json clientreq) {
     twait { client->connect(make_event()); }
     twait { client->request(std::move(clientreq), make_event(response)); }
     std::cout << response << "\n";
+    delete client;
 }
 
 void run_fsclient(Json config, Json clientreq) {

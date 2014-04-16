@@ -53,7 +53,9 @@ tamed void Vrchannel::handshake(bool active_end, double message_timeout,
             break;
     }
 
-    if (check_handshake(msg)) {
+    if (!done)
+        /* caller has given up, maybe channel is dead */;
+    else if (check_handshake(msg)) {
         log_receive(this) << msg << "\n";
         process_handshake(msg, !active_end);
         done(true);
