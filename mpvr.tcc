@@ -62,6 +62,7 @@ tamed void handshake_protocol(Vrchannel* peer, bool active_end,
     while (1) {
         if (active_end) {
             Json handshake_msg = Json::array(m_vri_handshake, Json::null,
+                                             peer->local_uid(), peer_uid,
                                              peer->connection_uid());
             log_send(peer) << handshake_msg << "\n";
             peer->send(handshake_msg);
@@ -79,15 +80,16 @@ tamed void handshake_protocol(Vrchannel* peer, bool active_end,
     if (!msg) { // null or false
         log_receive(peer) << "handshake timeout\n";
         done(false);
-    } else if (!(msg.is_a() && msg.size() >= 3 && msg[0] == m_vri_handshake
-                 && msg[2].is_s())) {
+    } else if (!(msg.is_a() && msg.size() >= 5 && msg[0] == m_vri_handshake
+                 && msg[2].is_s() && msg[3].is_s() && msg[4].is_s()
+                 && msg[3 - active_end].to_s() == peer->local_uid())) {
         log_receive(peer) << "bad handshake " << msg << "\n";
         done(false);
     } else {
         log_receive(peer) << msg << "\n";
 
         // parse handshake and respond
-        String handshake_value = msg[2].to_s();
+        String handshake_value = msg[4].to_s();
         assert(!peer->connection_uid()
                || peer->connection_uid() == handshake_value);
         peer->set_connection_uid(handshake_value);
