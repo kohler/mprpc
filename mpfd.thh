@@ -32,9 +32,14 @@ class msgpack_fd {
     void flush(tamer::event<> done);
     void flush(tamer::event<bool> done);
 
-    void read_request(tamer::event<Json> done);
+    void read(tamer::event<Json> done);
     template <typename R>
-    void read_request(tamer::preevent<R, Json> done);
+    void read(tamer::preevent<R, Json> done);
+
+    // deprecated
+    inline void read_request(tamer::event<Json> done);
+    template <typename R>
+    inline void read_request(tamer::preevent<R, Json> done);
 
     inline void call(const Json& j, tamer::event<Json> reply);
 
@@ -122,12 +127,12 @@ inline msgpack_fd::msgpack_fd() {
 
 inline msgpack_fd::msgpack_fd(tamer::fd rfd, tamer::fd wfd) {
     construct();
-    initialize(rfd, wfd);
+    initialize(std::move(rfd), std::move(wfd));
 }
 
 inline msgpack_fd::msgpack_fd(tamer::fd fd) {
     construct();
-    initialize(fd);
+    initialize(std::move(fd));
 }
 
 inline void msgpack_fd::initialize(tamer::fd fd) {
@@ -150,7 +155,7 @@ inline size_t msgpack_fd::call_seq() const {
     return rdreply_seq_ + rdreplywait_.size();
 }
 
-inline void msgpack_fd::read_request(tamer::event<Json> receiver) {
+inline void msgpack_fd::read(tamer::event<Json> receiver) {
     if (!rdreqq_.empty()) {
         if (receiver)
             swap(*receiver.result_pointer(), rdreqq_.front());
@@ -165,7 +170,7 @@ inline void msgpack_fd::read_request(tamer::event<Json> receiver) {
 }
 
 template <typename R>
-void msgpack_fd::read_request(tamer::preevent<R, Json> receiver) {
+void msgpack_fd::read(tamer::preevent<R, Json> receiver) {
     if (!rdreqq_.empty()) {
         swap(*receiver.result_pointer(), rdreqq_.front());
         rdreqq_.pop_front();
@@ -175,6 +180,15 @@ void msgpack_fd::read_request(tamer::preevent<R, Json> receiver) {
         receiver.unblock();
     } else
         rdreqwait_.push_back(receiver);
+}
+
+inline void msgpack_fd::read_request(tamer::event<Json> receiver) {
+    read(std::move(receiver));
+}
+
+template <typename R>
+inline void msgpack_fd::read_request(tamer::preevent<R, Json> receiver) {
+    read(std::move(receiver));
 }
 
 inline void msgpack_fd::write(const Json& j) {

@@ -234,17 +234,14 @@ bool Vrview::account_all_acks() {
 
 
 Vrreplica::Vrreplica(const String& group_name, Vrstate* state,
-                     Vrchannel* me, std::mt19937& rg)
-    : group_name_(group_name), state_(state), want_member_(!!me), me_(me),
+                     Vrchannel* me, Json local_name, std::mt19937& rg)
+    : group_name_(group_name), state_(state), me_(me),
       decideno_(0), commitno_(0), ackno_(0), sackno_(0),
       stopped_(false), commit_sent_at_(0),
       rg_(rg) {
-    if (me_) {
-        cur_view_ = Vrview::make_singular(me_->local_uid(),
-                                          me_->local_name());
-        endpoints_[me->local_uid()] = me;
-        listen_loop();
-    }
+    cur_view_ = Vrview::make_singular(me_->local_uid(), std::move(local_name));
+    channels_[me->local_uid()] = me;
+    listen_loop();
     next_view_ = cur_view_;
 }
 
@@ -291,56 +288,64 @@ tamed void Vrreplica::listen_loop() {
         twait { me_->receive_connection(make_event(peer)); }
         if (!peer)
             break;
-        connection_handshake(peer, false);
+        connection_handshake(peer, false, tamer::event<>());
     }
 }
 
 tamed void Vrreplica::connect(String peer_uid, event<> done) {
-    tamed { Vrchannel* peer; Json peer_name; }
+    tamed { Vrchannel* peer; channel_type* ch = &channels_[peer_uid]; }
     assert(me_);
 
     // does peer already exist?
-    if (endpoints_[peer_uid]) {
+    if (ch->c) {
         done();
         return;
     }
 
     // are we already connecting?
-    if (connection_wait_.count(peer_uid)) {
-        connection_wait_[peer_uid] += std::move(done);
+    if (ch->connecting) {
+        ch->wait += std::move(done);
         return;
     }
 
-    connection_wait_[peer_uid] = std::move(done);
+    ch->connecting = true;
+    ch->wait = std::move(done);
+    ch->backoff = 0.001;
+
     // random delay to reduce likelihood of simultaneous connection,
     // which we currently handle poorly
     twait { tamer::at_delay(rand01() / 100, make_event()); }
 
     // connected during delay?
-    if (endpoints_[peer_uid]) {
-        assert(!connection_wait_.count(peer_uid));
+    if (ch->c) {
+        assert(!ch->connecting);
         return;
     }
+    if (!ch->name)
+        ch->name = Json::object("uid", peer_uid);
 
-    log_connection(uid(), peer_uid) << "connecting\n";
-    if (!(peer_name = node_names_[peer_uid]))
-        peer_name = Json::object("uid", peer_uid);
-    twait { me_->connect(peer_uid, peer_name, make_event(peer)); }
-    if (peer) {
-        assert(peer->remote_uid() == peer_uid);
-        peer->set_connection_uid(Vrchannel::random_uid(rg_));
-        connection_handshake(peer, true);
-    } else {
-        connection_wait_[peer_uid]();
-        connection_wait_.erase(peer_uid);
+    while (!ch->c && ch->backoff < 10) {
+        log_connection(uid(), peer_uid) << "connecting\n";
+        twait { me_->connect(peer_uid, ch->name, make_event(peer)); }
+        if (peer) {
+            assert(peer->remote_uid() == peer_uid);
+            peer->set_connection_uid(Vrchannel::random_uid(rg_));
+            twait { connection_handshake(peer, true, make_event()); }
+        } else {
+            twait { tamer::at_delay(ch->backoff, make_event()); }
+            ch->backoff *= 2;
+        }
     }
+
+    ch->connecting = false;
+    ch->wait();
 }
 
 tamed void Vrreplica::join(String peer_uid, event<> done) {
     tamed { Vrchannel* ep; }
-    assert(want_member_ && next_view_.size() == 1);
+    assert(next_view_.size() == 1);
     while (next_view_.size() == 1) {
-        if ((ep = endpoints_[peer_uid])) {
+        if ((ep = channels_[peer_uid].c)) {
             ep->send(Json::array(Vrchannel::m_join, Json::null));
             twait {
                 at_view(next_view_.viewno + 1,
@@ -353,38 +358,38 @@ tamed void Vrreplica::join(String peer_uid, event<> done) {
 }
 
 void Vrreplica::join(String peer_uid, Json peer_name, event<> done) {
-    node_names_[peer_uid] = std::move(peer_name);
+    channels_[peer_uid].name = std::move(peer_name);
     return join(peer_uid, done);
 }
 
-tamed void Vrreplica::connection_handshake(Vrchannel* peer, bool active_end) {
+tamed void Vrreplica::connection_handshake(Vrchannel* peer, bool active_end,
+                                           tamer::event<> done) {
     tamed { bool ok = false; }
-
-    twait {
-        peer->handshake(active_end, k_.message_timeout,
-                        k_.handshake_timeout, make_event(ok));
-    }
-
-    String peer_uid = peer->remote_uid();
-
-    if (ok && endpoints_[peer_uid]) {
-        String old_cuid = endpoints_[peer_uid]->connection_uid();
-        if (old_cuid < peer->connection_uid())
-            log_connection(peer) << "preferring old connection (" << old_cuid << ")\n";
-        else {
-            log_connection(peer) << "dropping old connection (" << old_cuid << ")\n";
-            endpoints_[peer_uid]->close();
-            endpoints_[peer_uid] = peer;
-        }
-    } else if (ok)
-        endpoints_[peer_uid] = peer;
-
-    connection_wait_[peer_uid]();
-    connection_wait_.erase(peer_uid);
-    if (ok)
-        connection_loop(peer);
-    else
+    twait { peer->handshake(active_end, k_.message_timeout,
+                            k_.handshake_timeout, make_event(ok)); }
+    if (!ok)
         delete peer;
+    else {
+        String peer_uid = peer->remote_uid();
+        channel_type& ch = channels_[peer_uid];
+
+        if (ch.c) {
+            String old_cuid = ch.c->connection_uid();
+            if (old_cuid < peer->connection_uid())
+                log_connection(peer) << "preferring old connection (" << old_cuid << ")\n";
+            else {
+                log_connection(peer) << "dropping old connection (" << old_cuid << ")\n";
+                ch.c->close();
+                ch.c = peer;
+            }
+        } else
+            ch.c = peer;
+
+        ch.wait();
+        ch.connecting = false;
+        connection_loop(peer);
+    }
+    done();
 }
 
 tamed void Vrreplica::connection_loop(Vrchannel* peer) {
@@ -413,8 +418,8 @@ tamed void Vrreplica::connection_loop(Vrchannel* peer) {
     }
 
     log_connection(peer) << "connection closed\n";
-    if (endpoints_[peer->remote_uid()] == peer)
-        endpoints_.erase(peer->remote_uid());
+    if (channels_[peer->remote_uid()].c == peer)
+        channels_[peer->remote_uid()].c = nullptr;
     delete peer;
 }
 
@@ -643,7 +648,7 @@ Json Vrreplica::view_payload(const String& peer_uid) {
 
 tamed void Vrreplica::send_peer(String peer_uid, Json msg) {
     tamed { Vrchannel* ep = nullptr; }
-    while (!(ep = endpoints_[peer_uid]))
+    while (!(ep = channels_[peer_uid].c))
         twait { connect(peer_uid, make_event()); }
     if (ep != me_)
         ep->send(msg);
@@ -660,7 +665,7 @@ void Vrreplica::send_view(Vrchannel* who, Json payload, Json seqno) {
 tamed void Vrreplica::send_view(String peer_uid) {
     tamed { Json payload; Vrchannel* ep; }
     payload = view_payload(peer_uid);
-    while (!(ep = endpoints_[peer_uid]))
+    while (!(ep = channels_[peer_uid].c))
         twait { connect(peer_uid, make_event()); }
     if (ep != me_)
         send_view(ep, payload);
@@ -929,8 +934,7 @@ void Vrreplica::process_ack_update_commitno(lognumber_t new_commitno) {
         ++old_commitno;
     }
     for (auto it = messages.begin(); it != messages.end(); ++it) {
-        Vrchannel* ep = endpoints_[it->first];
-        if (ep) {
+        if (Vrchannel* ep = channels_[it->first].c) {
             log_send(ep) << it->second << "\n";
             ep->send(std::move(it->second));
         }

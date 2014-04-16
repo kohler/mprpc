@@ -30,8 +30,8 @@ void msgpack_fd::construct() {
 
 void msgpack_fd::initialize(tamer::fd rfd, tamer::fd wfd) {
     assert(!wfd_ && !rfd_ && !wrkill_ && !rdkill_ && !wrwake_ && !rdwake_);
-    wfd_ = wfd;
-    rfd_ = rfd;
+    wfd_ = std::move(wfd);
+    rfd_ = std::move(rfd);
     writer_coroutine();
     reader_coroutine();
 }

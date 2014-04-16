@@ -30,8 +30,6 @@ class Vrchannel {
     inline unsigned connection_version() const {
         return connection_version_;
     }
-    virtual Json local_name() const;
-    virtual Json remote_name() const;
 
     virtual void connect(String peer_uid, Json peer_name,
                          tamer::event<Vrchannel*> done);

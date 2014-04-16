@@ -20,14 +20,6 @@ const String Vrchannel::m_view("view");
 const String Vrchannel::m_error("error");
 
 
-Json Vrchannel::local_name() const {
-    return Json::object("uid", local_uid());
-}
-
-Json Vrchannel::remote_name() const {
-    return Json::object("uid", remote_uid());
-}
-
 void Vrchannel::connect(String, Json, tamer::event<Vrchannel*>) {
     assert(0);
 }

@@ -154,7 +154,7 @@ inline bool operator!=(const Vrview& a, const Vrview& b) {
 class Vrreplica {
   public:
     Vrreplica(const String& group_name, Vrstate* state,
-              Vrchannel* me, std::mt19937& rg);
+              Vrchannel* me, Json local_name, std::mt19937& rg);
 
     String group_name() const {
         return group_name_;
@@ -212,12 +212,23 @@ class Vrreplica {
     typedef Vrview view_type;
     view_type cur_view_;
     view_type next_view_;
-    bool want_member_;
+
+    struct channel_type {
+        Vrchannel* c;
+        Json name;
+        tamer::event<> wait;
+        double backoff;
+        bool connecting;
+        channel_type()
+            : c(0), backoff(0.001), connecting(false) {
+        }
+        channel_type(Vrchannel* channel)
+            : c(channel), backoff(0.001), connecting(false) {
+        }
+    };
 
     Vrchannel* me_;
-    mutable std::unordered_map<String, Vrchannel*> endpoints_;
-    mutable std::unordered_map<String, tamer::event<> > connection_wait_;
-    mutable std::unordered_map<String, Json> node_names_;
+    mutable std::unordered_map<String, channel_type> channels_;
 
     lognumber_t decideno_;
     lognumber_t commitno_;
@@ -286,7 +297,8 @@ class Vrreplica {
     template <typename T> void process_at_number(T number, std::deque<std::pair<T, tamer::event<> > >& list);
 
     tamed void listen_loop();
-    tamed void connection_handshake(Vrchannel* peer, bool active_end);
+    tamed void connection_handshake(Vrchannel* peer, bool active_end,
+                                    tamer::event<> done);
     tamed void connection_loop(Vrchannel* peer);
     tamed void primary_keepalive_loop();
     tamed void backup_keepalive_loop();

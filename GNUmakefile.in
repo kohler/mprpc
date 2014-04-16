@@ -17,7 +17,7 @@ LIBS = $(LIBTAMER) `$(TAMER) -l` @LIBS@ -lpthread -lm
 LDFLAGS = @LDFLAGS@
 
 TAMEDDIR = $(DEPSDIR)
-TAMER_COMMIT = 2a4799d08ad638784ae488b40dc5b95d8c2d1d94
+TAMER_COMMIT = 799ead40d506db264ffee9868c5fbd73518f3ecd
 
 CXXCOMPILE = $(CXX) $(DEFS) $(CPPFLAGS) $(CXXFLAGS)
 CXXLINK = $(CXX) $(CXXFLAGS)
@@ -47,7 +47,8 @@ $(TAMEDDIR)/%.hh: %.thh config.h $(DEPSDIR)/stamp $(TAMER)
 %.S: %.o
 	objdump -S $< > $@
 
-mpvr: vrreplica.o vrtest.o vrmain.o vrlog.o vrchannel.o logger.o mpfd.o \
+mpvr: vrreplica.o vrtest.o vrmain.o vrlog.o vrchannel.o vrnetchannel.o \
+		logger.o mpfd.o \
 		string.o straccum.o json.o compiler.o msgpack.o clp.o \
 		$(LIBTAMER)
 	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)
@@ -96,13 +97,14 @@ include $(DEPFILES)
 endif
 
 # tamer dependencies
-MPVR_HEADERS = $(addprefix $(TAMEDDIR)/,mpfd.hh vrreplica.hh vrtest.hh)
+MPVR_HEADERS = $(addprefix $(TAMEDDIR)/,mpfd.hh vrreplica.hh vrtest.hh vrnetchannel.hh)
 mpfd.o: $(TAMEDDIR)/mpfd.cc $(MPVR_HEADERS)
 mprpc.o: $(TAMEDDIR)/mprpc.cc $(MPVR_HEADERS)
 vrreplica.o: $(TAMEDDIR)/vrreplica.cc $(MPVR_HEADERS)
 vrtest.o: $(TAMEDDIR)/vrtest.cc $(MPVR_HEADERS)
 vrmain.o: $(TAMEDDIR)/vrmain.cc $(MPVR_HEADERS)
 vrchannel.o: $(TAMEDDIR)/vrchannel.cc $(MPVR_HEADERS)
+vrnetchannel.o: $(TAMEDDIR)/vrnetchannel.cc $(MPVR_HEADERS)
 
 always:
 	@:

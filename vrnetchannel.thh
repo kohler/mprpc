@@ -1,0 +1,28 @@
+// -*- mode: c++ -*-
+#ifndef VRNETCHANNEL_HH
+#define VRNETCHANNEL_HH 1
+#include "vrchannel.hh"
+#include <tamer/fd.hh>
+
+class Vrnetlistener : public Vrchannel {
+  public:
+    Vrnetlistener(String local_uid, unsigned port, std::mt19937& rg);
+    ~Vrnetlistener();
+
+    inline bool ok() const {
+        return fd_;
+    }
+
+    tamed void connect(String peer_uid, Json peer_name,
+                       tamer::event<Vrchannel*> done);
+    tamed void receive_connection(tamer::event<Vrchannel*> done);
+
+    void close();
+
+  private:
+    tamer::fd fd_;
+    unsigned port_;
+    std::mt19937& rg_;
+};
+
+#endif
