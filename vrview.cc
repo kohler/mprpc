@@ -17,41 +17,66 @@ Vrview Vrview::make_singular(String peer_uid, Json peer_name) {
     return v;
 }
 
-bool Vrview::assign(Json msg, const String& my_uid) {
+bool Vrview::parse(Json msg, bool require_view, const String& my_uid) {
     if (!msg.is_o())
         return false;
-    Json viewnoj = msg["viewno"];
+
     Json membersj = msg["members"];
-    Json primaryj = msg["primary"];
-    if (!(viewnoj.is_i() && viewnoj.to_i() >= 0
-          && membersj.is_a()
-          && primaryj.is_i()
-          && primaryj.to_i() >= 0 && primaryj.to_i() < membersj.size()))
+    if (!(membersj.is_a() || membersj.is_o()))
         return false;
 
-    viewno = viewnoj.to_u64();
-    primary_index = primaryj.to_i();
+    Json viewnoj = msg["viewno"];
+    if (viewnoj.is_u())
+        viewno = viewnoj.to_u();
+    else if (viewnoj.is_null() && !require_view)
+        viewno = 0;
+    else
+        return false;
+
+    Json primaryj = msg["primary"];
+    String primary_name;
+    if (primaryj.is_u())
+        primary_index = primaryj.to_u();
+    else if (primaryj.is_s() && !membersj.is_o()) {
+        primary_index = -1;
+        primary_name = primaryj.to_s();
+    } else if (primaryj.is_null() && !require_view)
+        primary_index = -1;
+    else
+        return false;
+
     my_index = -1;
+    members.clear();
+    nacked = nconfirmed = 0;
 
     std::unordered_map<String, int> seen_uids;
     String uid;
-    for (auto it = membersj.abegin(); it != membersj.aend(); ++it) {
-        Json peer_name;
-        if (it->is_object())
-            peer_name = *it;
-        else if (it->is_string())
-            peer_name = Json::object("uid", *it);
-        if (!peer_name.is_object()
-            || !peer_name.get("uid").is_string()
+    int itindex = 0;
+    for (auto it = membersj.begin(); it != membersj.end(); ++it, ++itindex) {
+        Json peer_name = it->second;
+        if (peer_name.is_string())
+            peer_name = Json::object("uid", std::move(peer_name));
+        if (!peer_name.is_object())
+            return false;
+        if (!peer_name.count("uid")
+            && !it->first.empty()
+            && !isdigit((unsigned char) it->first[0]))
+            peer_name["uid"] = it->first;
+        if (!peer_name.get("uid").is_string()
             || !(uid = peer_name.get("uid").to_s())
             || seen_uids.find(uid) != seen_uids.end())
             return false;
         seen_uids[uid] = 1;
         if (uid == my_uid)
-            my_index = it - membersj.abegin();
+            my_index = itindex;
+        if (primary_name && uid == primary_name)
+            primary_index = itindex;
         members.push_back(member_type(uid, std::move(peer_name)));
     }
 
+    if ((primary_index < 0 && (require_view || primary_name))
+        || primary_index >= (int) members.size())
+        return false;
     return true;
 }
 

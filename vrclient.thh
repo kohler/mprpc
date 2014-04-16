@@ -9,11 +9,10 @@ class Vrchannel;
 
 class Vrclient {
   public:
-    Vrclient(Vrchannel* me, std::mt19937& rg);
+    Vrclient(Vrchannel* me, Json config, std::mt19937& rg);
     ~Vrclient();
 
-    tamed void connect(String peer_uid, Json peer_name, tamer::event<> done);
-    inline void connect(String peer_uid, tamer::event<> done);
+    tamed void connect(tamer::event<> done);
     tamed void request(Json req, tamer::event<Json> done);
     inline void request(Json req, tamer::event<> done);
 
@@ -30,11 +29,8 @@ class Vrclient {
     tamed void connection_loop(Vrchannel* peer);
     void process_response(Json msg);
     void process_view(Json msg);
+    inline String random_replica_uid() const;
 };
-
-inline void Vrclient::connect(String peer_uid, tamer::event<> done) {
-    connect(peer_uid, Json::object("uid", peer_uid), done);
-}
 
 inline void Vrclient::request(Json req, tamer::event<> done) {
     request(std::move(req), tamer::rebind<Json>(done));

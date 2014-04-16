@@ -67,6 +67,7 @@ struct Vrview {
         return size() / 2;
     }
     inline String uid() const {
+        assert(my_index >= 0);
         return members[my_index].uid;
     }
     inline bool me_primary() const {
@@ -82,7 +83,7 @@ struct Vrview {
     Json members_json() const;
     Json acks_json() const;
 
-    bool assign(Json msg, const String& my_uid);
+    bool parse(Json msg, bool require_view, const String& my_uid);
     void add(String uid, const String& my_uid);
     void advance();
 

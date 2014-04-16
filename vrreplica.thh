@@ -8,19 +8,7 @@
 #include <random>
 #include <iostream>
 using tamer::event;
-
-class Vrstate {
-  public:
-    inline Vrstate() {
-    }
-    virtual ~Vrstate() {
-    }
-
-    virtual Json commit(Json x) {
-        return x;
-    }
-};
-
+class Vrstate;
 
 class Vrreplica {
   public:

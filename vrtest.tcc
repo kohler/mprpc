@@ -2,6 +2,7 @@
 #include "vrtest.hh"
 #include "vrreplica.hh"
 #include "vrclient.hh"
+#include "vrstate.hh"
 #include <algorithm>
 
 Vrtestnode::Vrtestnode(const String& uid, Vrtestcollection* collection)
@@ -146,11 +147,18 @@ Vrreplica* Vrtestcollection::add_replica(const String& uid) {
     return r;
 }
 
+Json Vrtestcollection::replica_configuration() const {
+    Json membersj = Json::object();
+    for (auto r : replicas_)
+        membersj[r->uid()] = Json::object();
+    return Json::object("members", std::move(membersj));
+}
+
 Vrclient* Vrtestcollection::add_client(const String& uid) {
     assert(testnodes_.find(uid) == testnodes_.end());
     Vrtestnode* tn = new Vrtestnode(uid, this);
     testnodes_[uid] = tn;
-    return new Vrclient(tn->listener(), rg_);
+    return new Vrclient(tn->listener(), replica_configuration(), rg_);
 }
 
 void Vrtestcollection::print_lognos() const {

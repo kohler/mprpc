@@ -35,6 +35,7 @@ class Vrtestcollection {
     inline double loss_p() const {
         return loss_p_;
     }
+    Json replica_configuration() const;
 
     Vrtestnode* test_node(const String& s) const {
         auto it = testnodes_.find(s);

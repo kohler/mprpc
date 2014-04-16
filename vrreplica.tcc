@@ -3,6 +3,7 @@
 #include "mpfd.hh"
 #include "vrtest.hh"
 #include "vrreplica.hh"
+#include "vrstate.hh"
 #include <netdb.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -225,7 +226,7 @@ void Vrreplica::at_commit(viewnumber_t commitno, tamer::event<> done) {
 void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
     Json payload = msg[2];
     Vrview v;
-    if (!v.assign(payload, uid())
+    if (!v.parse(payload, true, uid())
         || !v.count(who->remote_uid())) {
         who->send(Json::array(Vrchannel::m_error, -msg[1]));
         return;

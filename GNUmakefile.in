@@ -49,6 +49,7 @@ $(TAMEDDIR)/%.hh: %.thh config.h $(DEPSDIR)/stamp $(TAMER)
 
 mpvr: vrreplica.o vrview.o vrlog.o vrclient.o vrtest.o vrmain.o \
 		vrchannel.o vrnetchannel.o logger.o mpfd.o \
+		fsstate.o \
 		string.o straccum.o json.o compiler.o msgpack.o clp.o \
 		$(LIBTAMER)
 	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)

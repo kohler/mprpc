@@ -19,8 +19,9 @@ class Vrnetchannel : public Vrchannel {
 
 Vrnetlistener::Vrnetlistener(String local_uid, unsigned port,
                              std::mt19937& rg)
-    : Vrchannel(std::move(local_uid), String()),
-      fd_(tamer::tcp_listen(port)), port_(port), rg_(rg) {
+    : Vrchannel(std::move(local_uid), String()), port_(port), rg_(rg) {
+    if (port)
+        fd_ = tamer::tcp_listen(port);
 }
 
 Vrnetlistener::~Vrnetlistener() {

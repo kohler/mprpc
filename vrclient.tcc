@@ -2,9 +2,12 @@
 #include "vrclient.hh"
 #include "vrchannel.hh"
 
-Vrclient::Vrclient(Vrchannel* me, std::mt19937& rg)
+Vrclient::Vrclient(Vrchannel* me, Json config, std::mt19937& rg)
     : uid_(Vrchannel::random_uid(rg)), client_seqno_(1), me_(me),
       channel_(nullptr), stopped_(false), rg_(rg) {
+    bool ok = view_.parse(config, false, String());
+    assert(ok);
+    std::cerr << "CLIENT GOT " << view_.members_json() << "\n";
 }
 
 Vrclient::~Vrclient() {
@@ -71,24 +74,48 @@ void Vrclient::process_response(Json msg) {
 }
 
 void Vrclient::process_view(Json msg) {
-    if (view_.assign(msg[2], String())
-        && (!channel_ || view_.primary().uid != channel_->remote_uid())) {
-        if (channel_)
-            channel_->close();
-        channel_ = nullptr;
-        connect(view_.primary().uid, view_.primary().peer_name,
-                tamer::event<>());
+    Vrview view;
+    if (view.parse(msg[2], true, String())) {
+        std::swap(view_, view);
+        if (!channel_ || view_.primary().uid != channel_->remote_uid()) {
+            if (channel_)
+                channel_->close();
+            channel_ = nullptr;
+            connect(tamer::event<>());
+        }
     }
 }
 
-tamed void Vrclient::connect(String peer_uid, Json peer_name,
-                             tamer::event<> done) {
-    tamed { Vrchannel* peer; bool ok; int tries = 0; }
+inline String Vrclient::random_replica_uid() const {
+    if (view_.size() != 0) {
+        unsigned i = std::uniform_int_distribution<unsigned>(0, view_.size() - 1)(rg_);
+        return view_.members[i].uid;
+    } else
+        return String();
+}
+
+tamed void Vrclient::connect(tamer::event<> done) {
+    tamed {
+        String peer_uid;
+        Vrchannel* peer;
+        bool ok;
+        int tries = 0;
+    }
+
+    if (view_.primary_index >= 0)
+        peer_uid = view_.primary().uid;
+    else
+        peer_uid = random_replica_uid();
+
     while (1) {
         peer = nullptr;
         ok = false;
 
-        twait { me_->connect(peer_uid, peer_name, tamer::make_event(peer)); }
+        twait {
+            me_->connect(peer_uid,
+                         view_.find_pointer(peer_uid)->peer_name,
+                         tamer::make_event(peer));
+        }
 
         if (peer) {
             peer->set_connection_uid(Vrchannel::random_uid(rg_));
@@ -106,10 +133,7 @@ tamed void Vrclient::connect(String peer_uid, Json peer_name,
         delete peer;
         // every 8th try, look for someone else
         ++tries;
-        if (tries % 8 == 7 && view_.size()) {
-            unsigned i = std::uniform_int_distribution<unsigned>(0, view_.size() - 1)(rg_);
-            peer_uid = view_.members[i].uid;
-            peer_name = view_.members[i].peer_name;
-        }
+        if (tries % 8 == 7 && view_.size())
+            peer_uid = random_replica_uid();
     }
 }

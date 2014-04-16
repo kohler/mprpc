@@ -3,6 +3,8 @@
 #include "vrnetchannel.hh"
 #include "vrreplica.hh"
 #include "vrclient.hh"
+#include "vrstate.hh"
+#include "fsstate.hh"
 #include "clp.h"
 
 Logger logger(std::cout);
@@ -63,7 +65,7 @@ tamed void go(Vrtestcollection& vrg, std::vector<Vrreplica*>& nodes) {
         nodes[i]->dump(std::cout);
 
     client = vrg.add_client(make_client_uid());
-    twait { client->connect(nodes[0]->uid(), make_event()); }
+    twait { client->connect(make_event()); }
     many_requests(client);
     twait { tamer::at_delay_usec(10000, make_event()); }
     twait { tamer::at_delay_sec(3, make_event()); }
@@ -100,7 +102,7 @@ tamed void join_config(Vrreplica* vrr, String uid, Json name) {
     }
 }
 
-void run_config(Json config, String replicaname) {
+void run_fsreplica(Json config, String replicaname) {
     std::mt19937 rg(replicaname.hashcode() + time(0));
 
     String groupname = config["name"].to_s();
@@ -108,16 +110,36 @@ void run_config(Json config, String replicaname) {
         groupname = "vr";
 
     Json members = config["members"];
-    if (replicaname) {
-        Json my_name = members[replicaname];
-        assert(my_name && my_name["port"].is_u());
-        Vrnetlistener* my_conn = new Vrnetlistener(replicaname, my_name["port"].to_u(), rg);
-        assert(my_conn->ok());
-        Vrreplica* me = new Vrreplica(groupname, new Vrstate, my_conn, my_name, rg);
-        for (auto it = members.obegin(); it != members.oend(); ++it)
-            if (it->first != replicaname)
-                join_config(me, it->first, it->second);
-    }
+    Json my_name = members[replicaname];
+    assert(my_name && my_name["port"].is_u());
+    Vrnetlistener* my_conn = new Vrnetlistener(replicaname, my_name["port"].to_u(), rg);
+    assert(my_conn->ok());
+    Vrreplica* me = new Vrreplica(groupname, new Fsstate, my_conn, my_name, rg);
+    for (auto it = members.obegin(); it != members.oend(); ++it)
+        if (it->first != replicaname)
+            join_config(me, it->first, it->second);
+
+    tamer::loop();
+}
+
+tamed void run_fsclientreq(Vrclient* client, Json clientreq) {
+    tamed { Json response; }
+    twait { client->connect(make_event()); }
+    twait { client->request(std::move(clientreq), make_event(response)); }
+    std::cout << response << "\n";
+}
+
+void run_fsclient(Json config, Json clientreq) {
+    std::mt19937 rg(time(0));
+
+    String groupname = config["name"].to_s();
+    if (groupname.empty())
+        groupname = "vr";
+
+    Vrnetlistener* conn = new Vrnetlistener("c." + Vrchannel::random_uid(rg),
+                                            0, rg);
+    Vrclient* client = new Vrclient(conn, config, rg);
+    run_fsclientreq(client, std::move(clientreq));
 
     tamer::loop();
 }
@@ -141,6 +163,8 @@ int main(int argc, char** argv) {
     double loss_p = 0.1;
     String configfile;
     String replicaname;
+    Json clientreq;
+
     while (Clp_Next(clp) != Clp_Done) {
         if (Clp_IsLong(clp, "seed"))
             seed = clp->val.u;
@@ -162,6 +186,12 @@ int main(int argc, char** argv) {
             configfile = clp->negated ? String() : String(clp->vstr);
         else if (Clp_IsLong(clp, "replica"))
             replicaname = clp->vstr;
+        else if (clp->option->option_id == Clp_NotOption) {
+            if (!clientreq)
+                clientreq = Json::array();
+            Json j = Json::parse(clp->vstr);
+            clientreq.push_back(j.is_null() ? Json(clp->vstr) : std::move(j));
+        }
     }
 
     Json config;
@@ -182,8 +212,13 @@ int main(int argc, char** argv) {
         tamer::set_time_type(tamer::time_virtual);
     tamer::initialize();
 
-    if (config)
-        run_config(config, replicaname);
+    assert(config || (!replicaname && !clientreq));
+    assert(!(replicaname && clientreq));
+
+    if (config && replicaname)
+        run_fsreplica(config, replicaname);
+    else if (config && clientreq)
+        run_fsclient(config, clientreq);
     else
         run_test(seed, loss_p, n ? n : 5);
 
