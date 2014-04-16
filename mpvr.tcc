@@ -20,7 +20,7 @@ static const String m_vri_commit("commit");
 static const String m_vri_ack("ack");
     // R->P: [3, xxx, viewno, storeno]
 static const String m_vri_handshake("handshake");
-    // handshake_value
+    // [my_uid, your_uid, handshake_value]
 static const String m_vri_join("join");
     // []
 static const String m_vri_view("view");
@@ -81,8 +81,10 @@ tamed void handshake_protocol(Vrchannel* peer, bool active_end,
         log_receive(peer) << "handshake timeout\n";
         done(false);
     } else if (!(msg.is_a() && msg.size() >= 5 && msg[0] == m_vri_handshake
-                 && msg[2].is_s() && msg[3].is_s() && msg[4].is_s()
-                 && msg[3 - active_end].to_s() == peer->local_uid())) {
+                 && msg[2].is_s() && msg[4].is_s()
+                 && (msg[3].is_null()
+                     || (msg[3].is_s()
+                         && msg[3].to_s() == peer->local_uid())))) {
         log_receive(peer) << "bad handshake " << msg << "\n";
         done(false);
     } else {
@@ -93,8 +95,10 @@ tamed void handshake_protocol(Vrchannel* peer, bool active_end,
         assert(!peer->connection_uid()
                || peer->connection_uid() == handshake_value);
         peer->set_connection_uid(handshake_value);
-        if (!active_end)
+        if (!active_end) {
+            msg[2].swap(msg[3]);
             peer->send(msg);
+        }
 
         done(true);
     }
