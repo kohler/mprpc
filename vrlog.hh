@@ -24,8 +24,8 @@ struct Vrlogitem {
         : viewno(v), client_uid(std::move(cuid)), client_seqno(cseqno),
           request(std::move(req)) {
     }
-    bool is_real() const {
-        return client_uid;
+    bool empty() const {
+        return client_uid.empty();
     }
     inline bool request_equals(const Vrlogitem& x) const;
 };
@@ -75,7 +75,7 @@ class Vrlog {
 
 
 inline bool Vrlogitem::request_equals(const Vrlogitem& x) const {
-    return is_real()
+    return !empty()
         && viewno == x.viewno
         && client_uid == x.client_uid
         && client_seqno == x.client_seqno

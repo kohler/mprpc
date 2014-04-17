@@ -150,14 +150,15 @@ class Vrreplica {
     bool check_retransmitted_request(const String& client_uid,
                                      unsigned client_seqno,
                                      Json& response) const;
-    void process_commit(Vrchannel* who, const Json& msg);
-    void process_commit_log(const Json& msg);
+    void process_commit(Vrchannel* who, Json& msg);
+    void process_commit_log(Json& msg);
     void send_ack(Vrchannel* primary);
     Json commit_log_message(lognumber_t first, lognumber_t last) const;
     void send_commit_log(Vrview::member_type* peer,
                          lognumber_t first, lognumber_t last);
     void process_ack(Vrchannel* who, const Json& msg);
     void update_commitno(lognumber_t new_commitno);
+    void update_decideno(lognumber_t new_decideno);
     void process_ack_update_commitno(lognumber_t new_commitno);
 
     template <typename T> void process_at_number(T number, std::deque<std::pair<T, tamer::event<> > >& list);

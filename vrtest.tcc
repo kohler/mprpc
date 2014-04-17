@@ -295,7 +295,7 @@ void Vrtestcollection::check() {
             Vrreplica* r = replicas_[i];
             if (commitno_ >= r->first_logno()
                 && commitno_ < r->last_logno()
-                && r->log_entry(commitno_).is_real())
+                && !r->log_entry(commitno_).empty())
                 itemmap[i] = &r->log_entry(commitno_);
         }
         for (size_t i = 1; i != replicas_.size(); ++i)
@@ -345,7 +345,7 @@ void Vrtestcollection::check() {
         for (; first < last; ++first) {
             const Vrlogitem& li = r->log_entry(first);
             const Vrlogitem& cli = committed_log_[first];
-            if (li.is_real()) {
+            if (!li.empty()) {
                 assert(cli.viewno != li.viewno || cli.request_equals(li));
                 if (first < commit_counts.last()
                     && cli.viewno == li.viewno)
