@@ -1,3 +1,4 @@
+// -*- mode: c++ -*-
 #ifndef VRTEST_THH
 #define VRTEST_THH 1
 #include <set>
@@ -17,10 +18,6 @@ class Vrtestnode;
 
 class Vrtestcollection {
   public:
-    Vrstate* state_;
-    std::set<Vrtestchannel*> channels_;
-    mutable std::mt19937 rg_;
-
     Vrtestcollection(unsigned seed, double loss_p);
 
     Vrreplica* add_replica(const String& uid);
@@ -53,6 +50,9 @@ class Vrtestcollection {
     void check();
 
   private:
+    Vrstate* state_;
+    mutable std::mt19937 rg_;
+
     double loss_p_;
 
     std::unordered_map<String, Vrreplica*> replica_map_;
@@ -65,73 +65,6 @@ class Vrtestcollection {
 
     void print_lognos() const;
     void print_log_position(lognumber_t l) const;
-};
-
-class Vrtestnode {
-  public:
-    inline Vrtestnode(const String& uid, Vrtestcollection* collection);
-
-    inline const String& uid() const {
-        return uid_;
-    }
-    inline Json name() const {
-        return Json::object("uid", uid_);
-    }
-    inline Vrtestlistener* listener() const {
-        return listener_;
-    }
-    inline Vrtestcollection* collection() const {
-        return collection_;
-    }
-
-    Vrtestchannel* connect(Vrtestnode* x);
-
-  private:
-    String uid_;
-    Vrtestcollection* collection_;
-    Vrtestlistener* listener_;
-};
-
-class Vrtestlistener : public Vrchannel {
-  public:
-    inline Vrtestlistener(String my_uid, Vrtestcollection* collection)
-        : Vrchannel(my_uid, String()), collection_(collection) {
-        set_connection_uid(my_uid);
-    }
-    void connect(String peer_uid, Json peer_name,
-                 tamer::event<Vrchannel*> done);
-    void receive_connection(tamer::event<Vrchannel*> done);
-  private:
-    Vrtestcollection* collection_;
-    tamer::channel<Vrchannel*> listenq_;
-    friend class Vrtestnode;
-};
-
-class Vrtestchannel : public Vrchannel {
-  public:
-    Vrtestchannel(Vrtestnode* from, Vrtestnode* to);
-    ~Vrtestchannel();
-    inline void set_delay(double d);
-    inline void set_loss(double p);
-    inline Vrtestcollection* collection() const {
-        return from_node_->collection();
-    }
-    void send(Json msg);
-    void receive(tamer::event<Json> done);
-    void close();
-  private:
-    Vrtestnode* from_node_;
-    double delay_;
-    double loss_p_;
-    typedef std::pair<double, Json> message_t;
-    std::deque<message_t> q_;
-    std::deque<tamer::event<Json> > w_;
-    Vrtestchannel* peer_;
-    tamer::event<> coroutine_;
-    tamer::event<> kill_coroutine_;
-    tamed void coroutine();
-    inline void do_send(Json msg);
-    friend class Vrtestnode;
 };
 
 #endif

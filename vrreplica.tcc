@@ -1,16 +1,9 @@
 // -*- mode: c++ -*-
 #include "clp.h"
-#include "mpfd.hh"
-#include "vrtest.hh"
 #include "vrreplica.hh"
 #include "vrstate.hh"
-#include <netdb.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <algorithm>
-#include <set>
 #include <fstream>
-#include <tamer/channel.hh>
 
 Vrreplica::Vrreplica(const String& group_name, Vrstate* state,
                      Vrchannel* me, Json local_name, std::mt19937& rg)

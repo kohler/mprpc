@@ -99,15 +99,14 @@ include $(DEPFILES)
 endif
 
 # tamer dependencies
-MPVR_HEADERS = $(addprefix $(TAMEDDIR)/,mpfd.hh vrreplica.hh vrtest.hh vrnetchannel.hh vrclient.hh)
-mpfd.o: $(TAMEDDIR)/mpfd.cc $(MPVR_HEADERS)
-mprpc.o: $(TAMEDDIR)/mprpc.cc $(MPVR_HEADERS)
-vrreplica.o: $(TAMEDDIR)/vrreplica.cc $(MPVR_HEADERS)
-vrtest.o: $(TAMEDDIR)/vrtest.cc $(MPVR_HEADERS)
-vrmain.o: $(TAMEDDIR)/vrmain.cc $(MPVR_HEADERS)
-vrchannel.o: $(TAMEDDIR)/vrchannel.cc $(MPVR_HEADERS)
-vrnetchannel.o: $(TAMEDDIR)/vrnetchannel.cc $(MPVR_HEADERS)
-vrclient.o: $(TAMEDDIR)/vrclient.cc $(MPVR_HEADERS)
+mpfd.o: $(addprefix $(TAMEDDIR)/,mpfd.cc mpfd.hh)
+mprpc.o: $(addprefix $(TAMEDDIR)/,mprpc.cc mpfd.hh)
+vrchannel.o: $(addprefix $(TAMEDDIR)/,vrchannel.cc)
+vrnetchannel.o: $(addprefix $(TAMEDDIR)/,vrnetchannel.cc vrnetchannel.hh mpfd.hh)
+vrreplica.o: $(addprefix $(TAMEDDIR)/,vrreplica.cc vrreplica.hh)
+vrclient.o: $(addprefix $(TAMEDDIR)/,vrclient.cc vrclient.hh)
+vrtest.o: $(addprefix $(TAMEDDIR)/,vrtest.cc vrtest.hh vrreplica.hh vrclient.hh)
+vrmain.o: $(addprefix $(TAMEDDIR)/,vrmain.cc vrclient.hh vrnetchannel.hh vrreplica.hh vrtest.hh)
 
 always:
 	@:
