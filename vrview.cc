@@ -211,6 +211,9 @@ void Vrview::account_ack(member_type* peer, lognumber_t ackno) {
                 if (ackno <= it->ackno_)
                     ++peer->ackno_count_;
             }
+    } else if (old_ackno > ackno) {
+        peer->ackno_ = ackno;
+        account_all_acks();
     }
 }
 
