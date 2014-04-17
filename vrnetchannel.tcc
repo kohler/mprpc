@@ -7,7 +7,7 @@ class Vrnetchannel : public Vrchannel {
     Vrnetchannel(String local_uid, String remote_uid, tamer::fd cfd);
     ~Vrnetchannel();
 
-    void send(Json msg);
+    void send(Json msg, tamer::event<> done);
     void receive(tamer::event<Json> done);
 
     void close();
@@ -83,12 +83,12 @@ Vrnetchannel::Vrnetchannel(String local_uid, String remote_uid, tamer::fd cfd)
 Vrnetchannel::~Vrnetchannel() {
 }
 
-void Vrnetchannel::send(Json msg) {
-    cfd_.write(msg);
+void Vrnetchannel::send(Json msg, tamer::event<> done) {
+    cfd_.write(std::move(msg), std::move(done));
 }
 
 void Vrnetchannel::receive(tamer::event<Json> done) {
-    cfd_.read(done);
+    cfd_.read(std::move(done));
 }
 
 void Vrnetchannel::close() {

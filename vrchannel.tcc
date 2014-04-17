@@ -17,6 +17,7 @@ const String Vrchannel::m_join("join");
     // []
 const String Vrchannel::m_view("view");
     // view_object
+const String Vrchannel::m_kill("kill");
 const String Vrchannel::m_error("error");
 
 
@@ -62,6 +63,9 @@ tamed void Vrchannel::handshake(bool active_end, double message_timeout,
     } else if (!msg) { // null or false
         log_receive(this) << "handshake timeout\n";
         done(false);
+    } else if (msg.is_a() && msg[0] == m_kill) {
+        log_receive(this) << msg << "\n";
+        exit(0);
     } else {
         log_receive(this) << "bad handshake " << msg << "\n";
         done(false);
@@ -95,7 +99,7 @@ void Vrchannel::process_handshake(const Json& msg, bool reply) {
                          local_uid(), remote_uid(), connection_uid()));
 }
 
-void Vrchannel::send(Json) {
+void Vrchannel::send(Json, tamer::event<>) {
     assert(0);
 }
 

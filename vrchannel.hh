@@ -40,7 +40,8 @@ class Vrchannel {
     bool check_handshake(const Json& msg) const;
     void process_handshake(const Json& msg, bool reply);
 
-    virtual void send(Json msg);
+    inline void send(Json msg);
+    virtual void send(Json msg, tamer::event<> done);
     virtual void receive(tamer::event<Json> done);
 
     virtual void close();
@@ -54,6 +55,7 @@ class Vrchannel {
     static const String m_handshake;
     static const String m_join;
     static const String m_view;
+    static const String m_kill;
     static const String m_error;
 
   protected:
@@ -70,6 +72,10 @@ template <typename RNG>
 String Vrchannel::random_uid(RNG& rg) {
     uint64_t x = std::uniform_int_distribution<uint64_t>()(rg);
     return String((char*) &x, 6).encode_base64();
+}
+
+inline void Vrchannel::send(Json msg) {
+    send(std::move(msg), tamer::event<>());
 }
 
 

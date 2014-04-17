@@ -153,6 +153,7 @@ class Vrreplica {
                                      Json& response) const;
     void process_commit(Vrchannel* who, const Json& msg);
     void process_commit_log(const Json& msg);
+    void send_ack(Vrchannel* primary);
     Json commit_log_message(lognumber_t first, lognumber_t last) const;
     void send_commit_log(Vrview::member_type* peer,
                          lognumber_t first, lognumber_t last);

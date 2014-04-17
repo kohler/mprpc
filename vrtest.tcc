@@ -56,7 +56,7 @@ class Vrtestchannel : public Vrchannel {
     inline Vrtestcollection* collection() const {
         return from_node_->collection();
     }
-    void send(Json msg);
+    void send(Json msg, tamer::event<> done);
     void receive(tamer::event<Json> done);
     void close();
 
@@ -142,9 +142,10 @@ inline void Vrtestchannel::do_send(Json msg) {
     }
 }
 
-void Vrtestchannel::send(Json msg) {
+void Vrtestchannel::send(Json msg, tamer::event<> done) {
     if ((!loss_p_ || collection()->rand01() >= loss_p_) && peer_)
         peer_->do_send(std::move(msg));
+    done();
 }
 
 void Vrtestchannel::receive(event<Json> done) {

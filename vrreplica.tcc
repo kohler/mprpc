@@ -200,6 +200,8 @@ tamed void Vrreplica::connection_loop(Vrchannel* peer) {
             process_join(peer, msg);
         else if (msg[0] == Vrchannel::m_view)
             process_view(peer, msg);
+        else if (msg[0] == Vrchannel::m_kill)
+            exit(0);
     }
 
     log_connection(peer) << "connection closed\n";
@@ -621,10 +623,23 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
         send_view(who);
         return;
     }
+    primary_received_at_ = tamer::drecent();
 
     lognumber_t commitno = msg[3].to_u();
     lognumber_t decideno = commitno - msg[4].to_u();
-    assert(decideno <= last_logno());
+    // decideno indicates that all replicas, including us, agree. Use it to
+    // advance commitno. (Retransmitted commits won't work before decideno,
+    // because others may have truncated their logs: they know we have the
+    // commits.) NB might have decideno < first_logno() near view changes!
+    commitno = std::max(commitno, decideno);
+
+    if (decideno > last_logno()) {
+        // we recently came up and have forgotten our previously-committed
+        // state; can't handle this message
+        send_ack(who);
+        return;
+    }
+
     lognumber_t old_ackno = ackno_;
     ackno_ = std::max(ackno_, decideno);
     sackno_ = std::max(sackno_, decideno);
@@ -632,11 +647,6 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
     if (msg.size() > 6)
         process_commit_log(msg);
 
-    // decideno indicates that all replicas, including us, agree. Use it to
-    // advance commitno. (Retransmitted commits won't work before decideno,
-    // because others may have truncated their logs: they know we have the
-    // commits.) NB might have decideno < first_logno() near view changes!
-    commitno = std::max(commitno, decideno);
     if (commitno > commitno_
         && commitno >= ackno_
         && commitno <= last_logno())
@@ -649,16 +659,8 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
             log_.pop_front();
     }
 
-    if (msg.size() > 6 || ackno_ != old_ackno) {
-        Json ack_msg = Json::array(Vrchannel::m_ack,
-                                   Json::null,
-                                   cur_view_.viewno.value(),
-                                   ackno_.value(),
-                                   sackno_ - ackno_);
-        who->send(std::move(ack_msg));
-    }
-
-    primary_received_at_ = tamer::drecent();
+    if (msg.size() > 6 || ackno_ != old_ackno)
+        send_ack(who);
 }
 
 void Vrreplica::process_commit_log(const Json& msg) {
@@ -687,6 +689,14 @@ void Vrreplica::process_commit_log(const Json& msg) {
         }
 
     process_at_number(last_logno(), at_store_);
+}
+
+void Vrreplica::send_ack(Vrchannel* primary) {
+    primary->send(Json::array(Vrchannel::m_ack,
+                              Json::null,
+                              cur_view_.viewno.value(),
+                              ackno_.value(),
+                              sackno_ - ackno_));
 }
 
 void Vrreplica::process_ack(Vrchannel* who, const Json& msg) {

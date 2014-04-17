@@ -135,6 +135,32 @@ void run_fsclient(Json config, Json clientreq) {
 
     tamer::loop();
 }
+
+tamed void start_run_killreplicas(Json config, std::vector<String> uids) {
+    tamed {
+        std::mt19937 rg(time(0));
+        Vrnetlistener conn("k." + Vrchannel::random_uid(rg), 0, rg);
+        Vrchannel* chan;
+        size_t i;
+    }
+    for (i = 0; i != uids.size(); ++i)
+        if (config["members"][uids[i]]) {
+            twait { conn.connect(uids[i], config["members"][uids[i]],
+                                 make_event(chan)); }
+            if (chan) {
+                twait { chan->send(Json::array("kill"), make_event()); }
+                std::cerr << uids[i] << ": killed\n";
+                delete chan;
+            } else
+                std::cerr << uids[i] << ": connection failed\n";
+        } else
+            std::cerr << uids[i] << ": not a member of the configuration\n";
+}
+
+void run_killreplicas(Json config, std::vector<String> uids) {
+    start_run_killreplicas(std::move(config), std::move(uids));
+    tamer::loop();
+}
 }
 
 
@@ -145,7 +171,8 @@ static Clp_Option options[] = {
     { "quiet", 'q', 0, 0, Clp_Negate },
     { "seed", 's', 0, Clp_ValUnsigned, 0 },
     { "config", 'c', 0, Clp_ValString, Clp_Negate },
-    { "replica", 'r', 0, Clp_ValString, 0 }
+    { "replica", 'r', 0, Clp_ValString, 0 },
+    { "kill", 'k', 0, Clp_ValString, 0 }
 };
 
 int main(int argc, char** argv) {
@@ -156,6 +183,7 @@ int main(int argc, char** argv) {
     String configfile;
     String replicaname;
     Json clientreq;
+    std::vector<String> killreplicas;
 
     while (Clp_Next(clp) != Clp_Done) {
         if (Clp_IsLong(clp, "seed"))
@@ -178,6 +206,8 @@ int main(int argc, char** argv) {
             configfile = clp->negated ? String() : String(clp->vstr);
         else if (Clp_IsLong(clp, "replica"))
             replicaname = clp->vstr;
+        else if (Clp_IsLong(clp, "kill"))
+            killreplicas.push_back(clp->vstr);
         else if (clp->option->option_id == Clp_NotOption) {
             if (!clientreq)
                 clientreq = Json::array();
@@ -204,14 +234,16 @@ int main(int argc, char** argv) {
         tamer::set_time_type(tamer::time_virtual);
     tamer::initialize();
 
-    assert(config || (!replicaname && !clientreq));
+    assert(config || (!replicaname && !clientreq && killreplicas.empty()));
     assert(!(replicaname && clientreq));
 
+    if (config && !killreplicas.empty())
+        run_killreplicas(config, std::move(killreplicas));
     if (config && replicaname)
         run_fsreplica(config, replicaname);
     else if (config && clientreq)
         run_fsclient(config, clientreq);
-    else
+    else if (!config)
         run_test(seed, loss_p, n ? n : 5);
 
     tamer::cleanup();
