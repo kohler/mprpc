@@ -645,16 +645,11 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
     // commits.) NB might have decideno < first_logno() near view changes!
     commitno = std::max(commitno, decideno);
 
-    if (decideno > last_logno()) {
-        // we recently came up and have forgotten our previously-committed
-        // state; can't handle this message
-        send_ack(who);
-        return;
-    }
-
     lognumber_t old_ackno = ackno_;
-    ackno_ = std::max(ackno_, decideno);
-    sackno_ = std::max(sackno_, decideno);
+    if (decideno <= last_logno()) {
+        ackno_ = std::max(ackno_, decideno);
+        sackno_ = std::max(sackno_, decideno);
+    }
 
     if (msg.size() > 6)
         process_commit_log(msg);
@@ -671,7 +666,9 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
             log_.pop_front();
     }
 
-    if (msg.size() > 6 || ackno_ != old_ackno)
+    if (msg.size() > 6          /* new data to acknowledge */
+        || ackno_ != old_ackno  /* ackno_ changed */
+        || decideno > last_logno()) /* we recently came up and need logs */
         send_ack(who);
 }
 
@@ -679,10 +676,13 @@ void Vrreplica::process_commit_log(const Json& msg) {
     lognumber_t logno = msg[5].to_u();
     size_t nlog = (msg.size() - 6) / 4;
 
-    if (ackno_ == sackno_ && logno > sackno_)
-        sackno_ = logno;
     if (logno <= ackno_)
         ackno_ = std::max(ackno_, logno + nlog);
+    else if (logno - ackno_ > 2048)  // don't create a huge gap
+        return;
+
+    if (ackno_ == sackno_ && logno > sackno_)
+        sackno_ = logno;
     if (logno <= sackno_)
         sackno_ = std::max(ackno_, std::min(sackno_, logno));
 
