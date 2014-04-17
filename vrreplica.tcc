@@ -650,11 +650,19 @@ void Vrreplica::process_commit(Vrchannel* who, Json& msg) {
     primary_received_at_ = tamer::drecent();
 
     lognumber_t old_ackno = ackno_;
-    if (msg.size() > 6)
+    if (msg.size() >= 10)
         process_commit_log(msg);
 
     lognumber_t commitno = msg[3].to_u();
     lognumber_t decideno = commitno - msg[4].to_u();
+
+    while (ackno_ < last_logno()
+           && !log_[ackno_].empty()
+           && (ackno_ < decideno
+               || log_[ackno_].viewno == cur_view_.viewno))
+        ++ackno_;
+
+    sackno_ = std::max(sackno_, ackno_);
 
     lognumber_t x = std::min(std::max(commitno, commitno_), ackno_);
     if (x != commitno_)
@@ -674,7 +682,6 @@ void Vrreplica::process_commit(Vrchannel* who, Json& msg) {
 void Vrreplica::process_commit_log(Json& msg) {
     lognumber_t logno = msg[5].to_u();
     size_t nlog = (msg.size() - 6) / 4;
-    assert(nlog);
 
     // create log gap if necessary, but nothing huge
     if (logno > last_logno() + 2048)
@@ -696,19 +703,12 @@ void Vrreplica::process_commit_log(Json& msg) {
                 log_[i] = std::move(li);
         }
 
-    // adjust ackno_
+    // adjust ackno_ and sackno_
     if (logno <= ackno_)
         ackno_ = std::max(ackno_, logno + nlog);
-    while (ackno_ < last_logno()
-           && !log_[ackno_].empty()
-           && log_[ackno_].viewno == cur_view_.viewno)
-        ++ackno_;
-
-    // adjust sackno_
-    sackno_ = std::max(sackno_, ackno_);
-    if (logno > sackno_ && sackno_ == ackno_)
+    else if (sackno_ == ackno_)
         sackno_ = logno;
-    else if (logno > sackno_)
+    else
         sackno_ = std::min(sackno_, logno);
 
     process_at_number(last_logno(), at_store_);
