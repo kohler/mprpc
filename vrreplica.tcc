@@ -62,6 +62,19 @@ String Vrreplica::unparse_view_state() const {
     return sa.take_string();
 }
 
+void Vrreplica::check_logno() const {
+    if (decideno_ > commitno_
+        || decideno_ > ackno_
+        || (is_primary() && commitno_ > ackno_)
+        || ackno_ > sackno_)
+        logger() << tamer::recent() << ":" << uid() << ": bad lognos "
+                 << unparse_view_state() << "\n";
+    assert(decideno_ <= commitno_);
+    assert(decideno_ <= ackno_);
+    assert(!is_primary() || commitno_ <= ackno_);
+    assert(ackno_ <= sackno_);
+}
+
 tamed void Vrreplica::listen_loop() {
     tamed { Vrchannel* peer; }
     while (1) {
@@ -190,6 +203,7 @@ tamed void Vrreplica::connection_loop(Vrchannel* peer) {
     tamed { Json msg; }
 
     while (1) {
+        check_logno();
         msg.clear();
         twait { peer->receive(make_event(msg)); }
         if (!msg || !msg.is_a() || msg.size() < 2)
@@ -391,6 +405,8 @@ void Vrreplica::primary_adopt_view_change(Vrchannel* who) {
 
     // no one's logs are valid beyond the end of the current log
     next_view_.reduce_matching_logno(last_logno());
+    // our log is valid to the end of the current log
+    ackno_ = sackno_ = last_logno();
 
     // actually switch to new view
     next_view_.account_all_acks();
@@ -515,7 +531,7 @@ void Vrreplica::process_request(Vrchannel* who, const Json& msg) {
     if (msg.size() <= seqno_offset || !msg[seqno_offset].is_u()) {
         who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
-    } else if (!is_primary() || between_views()) {
+    } else if (!is_primary() || next_view_sent_confirm()) {
         send_view(who, Json(), msg[1]);
         return;
     }
@@ -610,42 +626,37 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
     }
 
     viewnumber_t view(msg[2].to_u());
-    if (view == cur_view_.viewno && !between_views())
-        /* OK, process below */;
-    else if (view == next_view_.viewno
-             && cur_view_.viewno != next_view_.viewno
-             && next_view_sent_confirm_) {
+    if (view == next_view_.viewno && next_view_sent_confirm()) {
         // after confirm is sent, a commit acts to change the view
         assert(!next_view_.me_primary()
                && next_view_.primary().uid == who->remote_uid());
         cur_view_ = next_view_;
-        next_view_sent_confirm_ = true;
+        process_at_number(cur_view_.viewno, at_view_);
         // acknowledge `commitno_` until log confirmed
         ackno_ = std::min(ackno_, commitno_);
-        sackno_ = std::max(commitno_, sackno_);
-        process_at_number(cur_view_.viewno, at_view_);
+        //sackno_ = std::max(commitno_, sackno_);
         backup_keepalive_loop();
-    } else if (view == next_view_.viewno) {
+    } else if (view != cur_view_.viewno && view == next_view_.viewno) {
         // couldn't complete view change because we haven't heard from other
         // members of the view; broadcast view to collect acknowledgements
         broadcast_view();
         return;
-    } else {
+    } else if (view != cur_view_.viewno || next_view_sent_confirm()) {
         // odd view
         send_view(who);
         return;
     }
     primary_received_at_ = tamer::drecent();
+    lognumber_t old_ackno = ackno_;
 
     lognumber_t commitno = msg[3].to_u();
     lognumber_t decideno = commitno - msg[4].to_u();
     // decideno indicates that all replicas, including us, agree. Use it to
-    // advance commitno. (Retransmitted commits won't work before decideno,
-    // because others may have truncated their logs: they know we have the
-    // commits.) NB might have decideno < first_logno() near view changes!
-    commitno = std::max(commitno, decideno);
-
-    lognumber_t old_ackno = ackno_;
+    // advance ackno. (We won't get explicit confirmation for commits
+    // before decideno; since others know we have the commits, they may have
+    // truncated their logs.) NB might have decideno < first_logno() near
+    // view changes! (The new master might starts out with less information
+    // about decideno than we have.)
     if (decideno <= last_logno()) {
         ackno_ = std::max(ackno_, decideno);
         sackno_ = std::max(sackno_, decideno);
@@ -719,7 +730,7 @@ void Vrreplica::process_ack(Vrchannel* who, const Json& msg) {
         who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
     } else if (msg[2].to_u() != cur_view_.viewno
-               || between_views()
+               || next_view_sent_confirm()
                || !(peer = cur_view_.find_pointer(who->remote_uid()))) {
         send_view(who);
         return;
@@ -727,6 +738,7 @@ void Vrreplica::process_ack(Vrchannel* who, const Json& msg) {
 
     // process acknowledgement
     lognumber_t ackno = msg[3].to_u();
+    lognumber_t sackno = ackno + msg[4].to_u();
     cur_view_.account_ack(peer, ackno);
     assert(!cur_view_.account_all_acks());
 
@@ -744,8 +756,8 @@ void Vrreplica::process_ack(Vrchannel* who, const Json& msg) {
     ackno_ = sackno_ = last_logno();
 
     // if sack, respond with gap
-    if (msg.size() > 4 && msg[4].to_u())
-        send_commit_log(peer, ackno, ackno + msg[4].to_u());
+    if (msg.size() > 4 && ackno != sackno)
+        send_commit_log(peer, ackno, sackno);
 }
 
 void Vrreplica::update_commitno(lognumber_t new_commitno) {

@@ -119,7 +119,7 @@ class Vrreplica {
         return cur_view_.viewno == v
             && (next_view_.viewno == v || !next_view_sent_confirm_);
     }
-    inline bool between_views() const {
+    inline bool next_view_sent_confirm() const {
         return cur_view_.viewno != next_view_.viewno
             && next_view_sent_confirm_;
     }
@@ -128,6 +128,7 @@ class Vrreplica {
         return urd(rg_);
     }
 
+    void check_logno() const;
     String unparse_view_state() const;
 
     tamed void send_peer(String peer_uid, Json msg);
