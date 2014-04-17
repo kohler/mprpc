@@ -142,9 +142,13 @@ tamed void start_run_killreplicas(Json config, std::vector<String> uids) {
         Vrnetlistener conn("k." + Vrchannel::random_uid(rg), 0, rg);
         Vrchannel* chan;
         size_t i;
+        std::set<String> killed;
     }
     for (i = 0; i != uids.size(); ++i)
-        if (config["members"][uids[i]]) {
+        if (killed.count(uids[i]))
+            /* skip */;
+        else if (config["members"][uids[i]]) {
+            killed.insert(uids[i]);
             twait { conn.connect(uids[i], config["members"][uids[i]],
                                  make_event(chan)); }
             if (chan) {
@@ -153,6 +157,10 @@ tamed void start_run_killreplicas(Json config, std::vector<String> uids) {
                 delete chan;
             } else
                 std::cerr << uids[i] << ": connection failed\n";
+        } else if (uids[i] == "all") {
+            for (auto it = config["members"].obegin();
+                 it != config["members"].oend(); ++it)
+                uids.push_back(it->first);
         } else
             std::cerr << uids[i] << ": not a member of the configuration\n";
 }
