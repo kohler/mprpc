@@ -635,7 +635,7 @@ void Vrreplica::process_commit(Vrchannel* who, Json& msg) {
         cur_view_ = next_view_;
         process_at_number(cur_view_.viewno, at_view_);
         // acknowledge `commitno_` until log confirmed
-        ackno_ = sackno_ = std::min(ackno_, commitno_);
+        ackno_ = sackno_ = commitno_;
         backup_keepalive_loop();
     } else if (view != cur_view_.viewno && view == next_view_.viewno) {
         // couldn't complete view change because we haven't heard from other
@@ -648,23 +648,13 @@ void Vrreplica::process_commit(Vrchannel* who, Json& msg) {
         return;
     }
     primary_received_at_ = tamer::drecent();
+
     lognumber_t old_ackno = ackno_;
+    if (msg.size() > 6)
+        process_commit_log(msg);
 
     lognumber_t commitno = msg[3].to_u();
     lognumber_t decideno = commitno - msg[4].to_u();
-    // decideno indicates that all replicas, including us, agree. Use it to
-    // advance ackno. (We won't get explicit confirmation for commits
-    // before decideno; since others know we have the commits, they may have
-    // truncated their logs.) NB might have decideno < first_logno() near
-    // view changes! (The new master might starts out with less information
-    // about decideno than we have.)
-    if (decideno <= last_logno()) {
-        ackno_ = std::max(ackno_, decideno);
-        sackno_ = std::max(sackno_, decideno);
-    }
-
-    if (msg.size() > 6)
-        process_commit_log(msg);
 
     lognumber_t x = std::min(std::max(commitno, commitno_), ackno_);
     if (x != commitno_)
