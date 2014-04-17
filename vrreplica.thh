@@ -4,6 +4,7 @@
 #include "logger.hh"
 #include "vrview.hh"
 #include "vrchannel.hh"
+#include <tamer/ref.hh>
 #include <unordered_map>
 #include <random>
 #include <iostream>
@@ -31,6 +32,7 @@ class Vrreplica {
     tamed void connect(String peer_uid, event<> done);
     tamed void join(String peer_uid, event<> done);
     void join(String peer_uid, Json peer_name, event<> done);
+    void join(const Vrview& config, event<> done);
 
     void at_view(viewnumber_t viewno, tamer::event<> done);
     void at_store(lognumber_t storeno, tamer::event<> done);
@@ -109,6 +111,8 @@ class Vrreplica {
     double commit_sent_at_;
     double primary_received_at_;
     std::mt19937& rg_;
+
+    tamer::ref ref_;
 
     inline bool is_primary() const {
         return cur_view_.me_primary();

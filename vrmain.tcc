@@ -93,15 +93,6 @@ void run_test(unsigned seed, double loss_p, unsigned n) {
 
 
 namespace {
-tamed void join_config(Vrreplica* vrr, String uid, Json name) {
-    tamed { double backoff = 0.1; }
-    while (vrr->current_view().size() == 1) {
-        twait { vrr->join(uid, name, make_event()); }
-        backoff = std::min(backoff * 2, 10.0);
-        twait { tamer::at_delay(backoff, make_event()); }
-    }
-}
-
 void run_fsreplica(Json config, String replicaname) {
     std::mt19937 rg(replicaname.hashcode() + time(0));
 
@@ -115,9 +106,9 @@ void run_fsreplica(Json config, String replicaname) {
     Vrnetlistener* my_conn = new Vrnetlistener(replicaname, my_name["port"].to_u(), rg);
     assert(my_conn->ok());
     Vrreplica* me = new Vrreplica(groupname, new Fsstate, my_conn, my_name, rg);
-    for (auto it = members.obegin(); it != members.oend(); ++it)
-        if (it->first != replicaname)
-            join_config(me, it->first, it->second);
+    Vrview configview;
+    configview.assign_parse(config, false, replicaname);
+    me->join(configview, event<>());
 
     tamer::loop();
 }

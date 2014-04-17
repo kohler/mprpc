@@ -65,8 +65,11 @@ tamed void Vrreplica::listen_loop() {
 }
 
 tamed void Vrreplica::connect(String peer_uid, event<> done) {
-    tamed { Vrchannel* peer; channel_type* ch = &channels_[peer_uid]; }
-    assert(me_);
+    tamed {
+        Vrchannel* peer;
+        channel_type* ch = &channels_[peer_uid];
+        tamer::ref_monitor mon(ref_);
+    }
 
     // does peer already exist?
     if (ch->c) {
@@ -89,12 +92,12 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
     twait { tamer::at_delay(rand01() / 100, make_event()); }
 
     // connected during delay?
+    if (!mon)
+        return;
     if (ch->c) {
         assert(!ch->connecting);
         return;
     }
-    if (!ch->name)
-        ch->name = Json::object("uid", peer_uid);
 
     while (!ch->c && ch->wait) {
         log_connection(uid(), peer_uid) << "connecting\n";
@@ -103,10 +106,11 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
             assert(peer->remote_uid() == peer_uid);
             peer->set_connection_uid(Vrchannel::random_uid(rg_));
             twait { connection_handshake(peer, true, make_event()); }
-        } else {
+        } else if (mon) {
             twait { tamer::at_delay(ch->backoff, make_event()); }
             ch->backoff = std::min(ch->backoff * 2, 10.0);
-        }
+        } else
+            return;
     }
 
     ch->connecting = false;
@@ -114,9 +118,8 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
 }
 
 tamed void Vrreplica::join(String peer_uid, event<> done) {
-    tamed { Vrchannel* ep; }
-    assert(next_view_.size() == 1);
-    while (next_view_.size() == 1) {
+    tamed { Vrchannel* ep; tamer::ref_monitor mon(ref_); }
+    while (mon && next_view_.size() == 1) {
         if ((ep = channels_[peer_uid].c)) {
             ep->send(Json::array(Vrchannel::m_join, Json::null));
             twait {
@@ -130,8 +133,18 @@ tamed void Vrreplica::join(String peer_uid, event<> done) {
 }
 
 void Vrreplica::join(String peer_uid, Json peer_name, event<> done) {
-    channels_[peer_uid].name = std::move(peer_name);
+    if ((peer_name = Vrview::clean_peer_name(std::move(peer_name))))
+        channels_[peer_uid].name = std::move(peer_name);
     return join(peer_uid, done);
+}
+
+void Vrreplica::join(const Vrview& config, event<> done) {
+    for (auto it = config.members.begin(); it != config.members.end(); ++it) {
+        if (it->peer_name)
+            channels_[it->uid].name = it->peer_name;
+        if (it->uid != uid())
+            join(it->uid, done);
+    }
 }
 
 tamed void Vrreplica::connection_handshake(Vrchannel* peer, bool active_end,
@@ -219,7 +232,7 @@ void Vrreplica::at_commit(viewnumber_t commitno, tamer::event<> done) {
 void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
     Json payload = msg[2];
     Vrview v;
-    if (!v.parse(payload, true, uid())
+    if (!v.assign_parse(payload, true, uid())
         || !v.count(who->remote_uid())) {
         who->send(Json::array(Vrchannel::m_error, -msg[1]));
         return;

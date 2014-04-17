@@ -87,7 +87,8 @@ struct Vrview {
     Json members_json() const;
     Json acks_json() const;
 
-    bool parse(Json msg, bool require_view, const String& my_uid);
+    static Json clean_peer_name(Json peer_name);
+    bool assign_parse(Json msg, bool require_view, const String& my_uid);
     void add(String uid, const String& my_uid);
     void advance();
 

@@ -17,7 +17,16 @@ Vrview Vrview::make_singular(String peer_uid, Json peer_name) {
     return v;
 }
 
-bool Vrview::parse(Json msg, bool require_view, const String& my_uid) {
+Json Vrview::clean_peer_name(Json peer_name) {
+    if (!peer_name.is_o()
+        || peer_name.empty()
+        || (peer_name.size() == 1 && peer_name.count("uid")))
+        return Json();
+    else
+        return std::move(peer_name);
+}
+
+bool Vrview::assign_parse(Json msg, bool require_view, const String& my_uid) {
     if (!msg.is_o())
         return false;
 
@@ -73,13 +82,8 @@ bool Vrview::parse(Json msg, bool require_view, const String& my_uid) {
             || seen_uids.count(peer_uid))
             return false;
 
-        if (peer_name.is_o()
-            && (peer_name.empty()
-                || (peer_name.size() == 1
-                    && peer_name.count("uid"))))
-            peer_name = Json();
         members.push_back(member_type(std::move(peer_uid),
-                                      std::move(peer_name)));
+                                      clean_peer_name(std::move(peer_name))));
 
         if (peer_uid == my_uid)
             my_index = itindex;

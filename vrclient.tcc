@@ -4,7 +4,7 @@
 
 Vrclient::Vrclient(Vrchannel* me, Json config, std::mt19937& rg)
     : client_seqno_(1), channel_(nullptr), me_(me), stopped_(false), rg_(rg) {
-    bool ok = view_.parse(config, false, String());
+    bool ok = view_.assign_parse(config, false, String());
     assert(ok);
     merge_view_peer_names();
 }
@@ -92,7 +92,7 @@ void Vrclient::process_response(Json msg) {
 
 void Vrclient::process_view(Json msg) {
     Vrview view;
-    if (view.parse(msg[2], true, String())) {
+    if (view.assign_parse(msg[2], true, String())) {
         std::swap(view_, view);
         merge_view_peer_names();
         if (!channel_ || view_.primary().uid != channel_->remote_uid()) {
