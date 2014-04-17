@@ -5,16 +5,24 @@
 #include <algorithm>
 #include <fstream>
 
-Vrreplica::Vrreplica(const String& group_name, Vrstate* state,
-                     Vrchannel* me, Json local_name, std::mt19937& rg)
-    : group_name_(group_name), state_(state), me_(me),
+Vrreplica::Vrreplica(Vrstate* state, const Vrview& config,
+                     Vrchannel* me, std::mt19937& rg)
+    : state_(state), me_(me),
       decideno_(0), commitno_(0), ackno_(0), sackno_(0),
       stopped_(false), commit_sent_at_(0),
       rg_(rg) {
-    cur_view_ = Vrview::make_singular(me_->local_uid(), std::move(local_name));
-    channels_[me->local_uid()] = me;
-    listen_loop();
+    assert(config.empty() || config.count(uid()));
+
+    // adopt channel names from config
+    for (auto it = config.members.begin(); it != config.members.end(); ++it)
+        if (it->peer_name)
+            channels_[it->uid].name = it->peer_name;
+    channels_[uid()].c = me;
+
+    // current view == just me
+    cur_view_ = Vrview::make_singular(config.group_name(), uid());
     next_view_ = cur_view_;
+    listen_loop();
 }
 
 void Vrreplica::dump(std::ostream& out) const {
@@ -139,6 +147,7 @@ void Vrreplica::join(String peer_uid, Json peer_name, event<> done) {
 }
 
 void Vrreplica::join(const Vrview& config, event<> done) {
+    assert(config.group_name() == cur_view_.group_name());
     for (auto it = config.members.begin(); it != config.members.end(); ++it) {
         if (it->peer_name)
             channels_[it->uid].name = it->peer_name;
@@ -235,7 +244,8 @@ void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
     Json payload = msg[2];
     Vrview v;
     if (!v.assign_parse(payload, true, uid())
-        || !v.count(who->remote_uid())) {
+        || !v.count(who->remote_uid())
+        || v.group_name() != cur_view_.group_name()) {
         who->send(Json::array(Vrchannel::m_error, -msg[1]));
         return;
     }
@@ -401,6 +411,8 @@ Json Vrreplica::view_payload(const String& peer_uid) {
     Json payload = Json::object("viewno", next_view_.viewno.value(),
                                 "members", next_view_.members_json(),
                                 "primary", next_view_.primary_index);
+    if (next_view_.group_name())
+        payload.set("group_name", next_view_.group_name());
     if (next_view_.me_primary())
         payload.set("ackno", ackno_.value());
     else

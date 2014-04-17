@@ -202,7 +202,7 @@ Vrreplica* Vrtestcollection::add_replica(const String& uid) {
     assert(testnodes_.find(uid) == testnodes_.end());
     Vrtestnode* tn = new Vrtestnode(uid, this);
     testnodes_[uid] = tn;
-    Vrreplica* r = new Vrreplica(tn->uid(), state_, tn->listener(), Json(), rg_);
+    Vrreplica* r = new Vrreplica(state_, Vrview(), tn->listener(), rg_);
     replica_map_[uid] = r;
     replicas_.push_back(r);
     std::sort(replicas_.begin(), replicas_.end(), [](Vrreplica* a, Vrreplica* b) {
@@ -211,11 +211,11 @@ Vrreplica* Vrtestcollection::add_replica(const String& uid) {
     return r;
 }
 
-Json Vrtestcollection::replica_configuration() const {
-    Json membersj = Json::object();
+Vrview Vrtestcollection::replica_configuration() const {
+    Vrview v;
     for (auto r : replicas_)
-        membersj[r->uid()] = Json::object();
-    return Json::object("members", std::move(membersj));
+        v.add(r->uid(), String());
+    return v;
 }
 
 Vrclient* Vrtestcollection::add_client(const String& uid) {

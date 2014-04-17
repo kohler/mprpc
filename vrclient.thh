@@ -10,7 +10,7 @@ class Vrchannel;
 
 class Vrclient {
   public:
-    Vrclient(Vrchannel* me, Json config, std::mt19937& rg);
+    Vrclient(Vrchannel* me, const Vrview& config, std::mt19937& rg);
     ~Vrclient();
 
     tamed void connect(tamer::event<> done);

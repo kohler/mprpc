@@ -93,22 +93,16 @@ void run_test(unsigned seed, double loss_p, unsigned n) {
 
 
 namespace {
-void run_fsreplica(Json config, String replicaname) {
+void run_fsreplica(const Vrview& config, String replicaname) {
     std::mt19937 rg(replicaname.hashcode() + time(0));
+    vrconstants.trim_log = false;
 
-    String groupname = config["name"].to_s();
-    if (groupname.empty())
-        groupname = "vr";
-
-    Json members = config["members"];
-    Json my_name = members[replicaname];
-    assert(my_name && my_name["port"].is_u());
-    Vrnetlistener* my_conn = new Vrnetlistener(replicaname, my_name["port"].to_u(), rg);
+    auto my_mem = config.find_pointer(replicaname);
+    assert(my_mem && my_mem->peer_name["port"].is_u());
+    Vrnetlistener* my_conn = new Vrnetlistener(replicaname, my_mem->peer_name["port"].to_u(), rg);
     assert(my_conn->ok());
-    Vrreplica* me = new Vrreplica(groupname, new Fsstate, my_conn, my_name, rg);
-    Vrview configview;
-    configview.assign_parse(config, false, replicaname);
-    me->join(configview, event<>());
+    Vrreplica* me = new Vrreplica(new Fsstate, config, my_conn, rg);
+    me->join(config, event<>());
 
     tamer::loop();
 }
@@ -121,52 +115,46 @@ tamed void run_fsclientreq(Vrclient* client, Json clientreq) {
     delete client;
 }
 
-void run_fsclient(Json config, Json clientreq) {
+void run_fsclient(const Vrview& config, Json clientreq) {
     std::mt19937 rg(time(0));
-
-    String groupname = config["name"].to_s();
-    if (groupname.empty())
-        groupname = "vr";
-
     Vrnetlistener* conn = new Vrnetlistener("c." + Vrchannel::random_uid(rg),
                                             0, rg);
     Vrclient* client = new Vrclient(conn, config, rg);
     run_fsclientreq(client, std::move(clientreq));
-
     tamer::loop();
 }
 
-tamed void start_run_killreplicas(Json config, std::vector<String> uids) {
+tamed void start_run_killreplicas(const Vrview& config,
+                                  std::vector<String> uids) {
     tamed {
         std::mt19937 rg(time(0));
         Vrnetlistener conn("k." + Vrchannel::random_uid(rg), 0, rg);
         Vrchannel* chan;
+        const Vrview::member_type* mem;
         size_t i;
         std::set<String> killed;
     }
     for (i = 0; i != uids.size(); ++i)
         if (killed.count(uids[i]))
             /* skip */;
-        else if (config["members"][uids[i]]) {
-            killed.insert(uids[i]);
-            twait { conn.connect(uids[i], config["members"][uids[i]],
-                                 make_event(chan)); }
+        else if ((mem = config.find_pointer(uids[i]))) {
+            killed.insert(mem->uid);
+            twait { conn.connect(mem->uid, mem->peer_name, make_event(chan)); }
             if (chan) {
                 twait { chan->send(Json::array("kill"), make_event()); }
-                std::cerr << uids[i] << ": killed\n";
+                std::cerr << mem->uid << ": killed\n";
                 delete chan;
             } else
-                std::cerr << uids[i] << ": connection failed\n";
+                std::cerr << mem->uid << ": connection failed\n";
         } else if (uids[i] == "all") {
-            for (auto it = config["members"].obegin();
-                 it != config["members"].oend(); ++it)
-                uids.push_back(it->first);
+            for (auto it = config.members.begin(); it != config.members.end(); ++it)
+                uids.push_back(it->uid);
         } else
             std::cerr << uids[i] << ": not a member of the configuration\n";
 }
 
-void run_killreplicas(Json config, std::vector<String> uids) {
-    start_run_killreplicas(std::move(config), std::move(uids));
+void run_killreplicas(const Vrview& config, std::vector<String> uids) {
+    start_run_killreplicas(config, std::move(uids));
     tamer::loop();
 }
 }
@@ -224,7 +212,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    Json config;
+    Vrview config;
     if (configfile) {
         String fname = configfile == "-" ? "<stdin>" : configfile;
         FILE* f = configfile == "-" ? stdin : fopen(configfile.c_str(), "r");
@@ -233,8 +221,8 @@ int main(int argc, char** argv) {
         while (!feof(f))
             sa.extend(fread(sa.reserve(8192), 1, 8192, f));
         fclose(f);
-        config = Json::parse(sa.take_string());
-        if (!config || !config.is_o() || !config["members"]) {
+        Json configj = Json::parse(sa.take_string());
+        if (!configj || !config.assign_parse(configj, false, String())) {
             std::cerr << fname << ": parse error\n";
             exit(1);
         }
@@ -242,16 +230,17 @@ int main(int argc, char** argv) {
         tamer::set_time_type(tamer::time_virtual);
     tamer::initialize();
 
-    assert(config || (!replicaname && !clientreq && killreplicas.empty()));
+    assert(!config.empty()
+           || (!replicaname && !clientreq && killreplicas.empty()));
     assert(!(replicaname && clientreq));
 
-    if (config && !killreplicas.empty())
+    if (!config.empty() && !killreplicas.empty())
         run_killreplicas(config, std::move(killreplicas));
-    if (config && replicaname)
+    if (!config.empty() && replicaname)
         run_fsreplica(config, replicaname);
-    else if (config && clientreq)
+    else if (!config.empty() && clientreq)
         run_fsclient(config, clientreq);
-    else if (!config)
+    else if (config.empty())
         run_test(seed, loss_p, n ? n : 5);
 
     tamer::cleanup();

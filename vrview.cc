@@ -8,10 +8,10 @@ Vrview::Vrview()
     : viewno(0), primary_index(0), my_index(-1), nacked(0), nconfirmed(0) {
 }
 
-Vrview Vrview::make_singular(String peer_uid, Json peer_name) {
+Vrview Vrview::make_singular(String group_name, String peer_uid) {
     Vrview v;
-    v.members.push_back(member_type(std::move(peer_uid),
-                                    std::move(peer_name)));
+    v.group_name_ = std::move(group_name);
+    v.members.push_back(member_type(std::move(peer_uid), Json()));
     v.primary_index = v.my_index = 0;
     v.account_ack(&v.members.back(), 0);
     return v;
@@ -27,7 +27,18 @@ Json Vrview::clean_peer_name(Json peer_name) {
 }
 
 bool Vrview::assign_parse(Json msg, bool require_view, const String& my_uid) {
+    group_name_ = String();
+    viewno = 0;
+    primary_index = my_index = -1;
+    members.clear();
+    nacked = nconfirmed = 0;
+
     if (!msg.is_o())
+        return false;
+
+    if (msg["group_name"].is_s())
+        group_name_ = msg["group_name"].to_s();
+    else if (!msg["group_name"].is_null())
         return false;
 
     Json membersj = msg["members"];
@@ -53,10 +64,6 @@ bool Vrview::assign_parse(Json msg, bool require_view, const String& my_uid) {
         primary_index = -1;
     else
         return false;
-
-    my_index = -1;
-    members.clear();
-    nacked = nconfirmed = 0;
 
     std::unordered_map<String, int> seen_uids;
     int itindex = 0;

@@ -11,6 +11,7 @@
 class Vrstate;
 class Vrclient;
 class Vrreplica;
+class Vrview;
 
 class Vrtestchannel;
 class Vrtestlistener;
@@ -32,7 +33,7 @@ class Vrtestcollection {
     inline double loss_p() const {
         return loss_p_;
     }
-    Json replica_configuration() const;
+    Vrview replica_configuration() const;
 
     Vrtestnode* test_node(const String& s) const {
         auto it = testnodes_.find(s);

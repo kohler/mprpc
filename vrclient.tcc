@@ -2,10 +2,9 @@
 #include "vrclient.hh"
 #include "vrchannel.hh"
 
-Vrclient::Vrclient(Vrchannel* me, Json config, std::mt19937& rg)
-    : client_seqno_(1), channel_(nullptr), me_(me), stopped_(false), rg_(rg) {
-    bool ok = view_.assign_parse(config, false, String());
-    assert(ok);
+Vrclient::Vrclient(Vrchannel* me, const Vrview& config, std::mt19937& rg)
+    : client_seqno_(1), channel_(nullptr), me_(me), view_(config),
+      stopped_(false), rg_(rg) {
     merge_view_peer_names();
 }
 

@@ -13,14 +13,13 @@ class Vrstate;
 
 class Vrreplica {
   public:
-    Vrreplica(const String& group_name, Vrstate* state,
-              Vrchannel* me, Json local_name, std::mt19937& rg);
+    Vrreplica(Vrstate* state,
+              const Vrview& config,
+              Vrchannel* me,
+              std::mt19937& rg);
 
-    String group_name() const {
-        return group_name_;
-    }
     String uid() const {
-        return me_ ? me_->local_uid() : String();
+        return me_->local_uid();
     }
     viewnumber_t view_number() const {
         return cur_view_.viewno;
@@ -67,7 +66,6 @@ class Vrreplica {
     void dump(std::ostream&) const;
 
   private:
-    String group_name_;
     Vrstate *state_;
 
     typedef Vrview view_type;

@@ -62,7 +62,7 @@ struct Vrview {
     unsigned nconfirmed;
 
     Vrview();
-    static Vrview make_singular(String peer_uid, Json peer_name);
+    static Vrview make_singular(String group_name, String peer_uid);
 
     inline bool empty() const {
         return members.empty();
@@ -82,6 +82,9 @@ struct Vrview {
     }
     inline member_type& primary() {
         return members[primary_index];
+    }
+    inline const String& group_name() const {
+        return group_name_;
     }
 
     inline int count(const String& uid) const;
@@ -106,6 +109,9 @@ struct Vrview {
 
     void account_ack(member_type* peer, lognumber_t ackno);
     bool account_all_acks();
+
+  private:
+    String group_name_;
 };
 
 inline int Vrview::count(const String& uid) const {
