@@ -64,6 +64,9 @@ struct Vrview {
     Vrview();
     static Vrview make_singular(String peer_uid, Json peer_name);
 
+    inline bool empty() const {
+        return members.empty();
+    }
     inline unsigned size() const {
         return members.size();
     }
@@ -83,6 +86,7 @@ struct Vrview {
 
     inline int count(const String& uid) const;
     inline member_type* find_pointer(const String& uid);
+    inline const member_type* find_pointer(const String& uid) const;
 
     Json members_json() const;
     Json acks_json() const;
@@ -118,6 +122,13 @@ inline Vrview::member_type* Vrview::find_pointer(const String& uid) {
     return nullptr;
 }
 
+inline const Vrview::member_type* Vrview::find_pointer(const String& uid) const {
+    for (auto it = members.begin(); it != members.end(); ++it)
+        if (it->uid == uid)
+            return &*it;
+    return nullptr;
+}
+
 inline Json Vrview::members_json() const {
     Json j = Json::array();
     for (auto it = members.begin(); it != members.end(); ++it)
@@ -147,6 +158,7 @@ class Vrconstants {
     double backup_keepalive_timeout;
     double view_change_timeout;
     double retransmit_log_timeout;
+    bool trim_log;
 
     Vrconstants()
         : message_timeout(1),
@@ -156,7 +168,8 @@ class Vrconstants {
           primary_keepalive_timeout(1),
           backup_keepalive_timeout(2),
           view_change_timeout(0.5),
-          retransmit_log_timeout(2) {
+          retransmit_log_timeout(2),
+          trim_log(true) {
     }
 };
 

@@ -655,7 +655,7 @@ void Vrreplica::process_commit(Vrchannel* who, const Json& msg) {
     if (decideno > decideno_
         && decideno <= commitno_) {
         decideno_ = decideno;
-        while (log_.first() < decideno_)
+        while (log_.first() < decideno_ && vrconstants.trim_log)
             log_.pop_front();
     }
 
@@ -725,7 +725,7 @@ void Vrreplica::process_ack(Vrchannel* who, const Json& msg) {
     if (peer->ackno_count() == cur_view_.size()
         && ackno > decideno_)
         decideno_ = ackno;
-    while (log_.first() < decideno_)
+    while (log_.first() < decideno_ && vrconstants.trim_log)
         log_.pop_front();
 
     // primary doesn't really have an ackno, but update for check()'s sake
