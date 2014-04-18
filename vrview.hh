@@ -6,13 +6,11 @@ struct Vrview {
     struct member_type {
         String uid;
         Json peer_name;
-        bool acked;
-        bool confirmed;
 
         explicit member_type(String peer_uid, Json peer_name)
             : uid(std::move(peer_uid)), peer_name(std::move(peer_name)),
-              acked(false), confirmed(false),
-              has_ackno_(false), has_matching_logno_(false), ackno_count_(0) {
+              prepared_(false), confirmed_(false),
+              has_ackno_(false), has_matching_logno_(false) {
             if (this->peer_name.is_o() && this->peer_name.empty())
                 this->peer_name = Json();
             if (this->peer_name.is_o() && !this->peer_name["uid"])
@@ -21,19 +19,22 @@ struct Vrview {
                 assert(this->peer_name["uid"] == uid);
         }
 
+        bool prepared() const {
+            return prepared_;
+        }
+        bool confirmed() const {
+            return confirmed_;
+        }
         bool has_ackno() const {
             return has_ackno_;
         }
         lognumber_t ackno() const {
             return ackno_;
         }
-        unsigned ackno_count() const {
-            assert(has_ackno());
-            return ackno_count_;
-        }
         double ackno_changed_at() const {
             return ackno_changed_at_;
         }
+        void set_ackno(lognumber_t ackno);
 
         bool has_matching_logno() const {
             return has_matching_logno_;
@@ -44,11 +45,12 @@ struct Vrview {
         }
 
       private:
+        bool prepared_;
+        bool confirmed_;
         bool has_ackno_;
         bool has_matching_logno_;
         lognumber_t ackno_;
         lognumber_t matching_logno_;
-        unsigned ackno_count_;
         double ackno_changed_at_;
 
         friend struct Vrview;
@@ -58,7 +60,7 @@ struct Vrview {
     std::vector<member_type> members;
     int primary_index;
     int my_index;
-    unsigned nacked;
+    unsigned nprepared;
     unsigned nconfirmed;
 
     Vrview();
@@ -107,8 +109,7 @@ struct Vrview {
     void set_matching_logno(String uid, lognumber_t logno);
     void reduce_matching_logno(lognumber_t logno);
 
-    void account_ack(member_type* peer, lognumber_t ackno);
-    bool account_all_acks();
+    unsigned count_acks(lognumber_t ackno) const;
 
   private:
     String group_name_;

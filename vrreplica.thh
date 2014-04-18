@@ -95,7 +95,7 @@ class Vrreplica {
     lognumber_t sackno_;
     Vrlog<Vrlogitem, lognumber_t::value_type> log_;
 
-    bool next_view_sent_confirm_;
+    bool between_views_;
     Vrlog<Vrlogitem, lognumber_t::value_type> next_log_;
 
     bool stopped_;
@@ -115,20 +115,12 @@ class Vrreplica {
     inline bool is_primary() const {
         return cur_view_.me_primary();
     }
-    inline bool in_view(viewnumber_t v) const {
-        return cur_view_.viewno == v
-            && (next_view_.viewno == v || !next_view_sent_confirm_);
-    }
-    inline bool next_view_sent_confirm() const {
-        return cur_view_.viewno != next_view_.viewno
-            && next_view_sent_confirm_;
-    }
     inline double rand01() const {
         std::uniform_real_distribution<double> urd;
         return urd(rg_);
     }
 
-    void check_logno() const;
+    void verify_state() const;
     String unparse_view_state() const;
 
     tamed void send_peer(String peer_uid, Json msg);
@@ -146,7 +138,7 @@ class Vrreplica {
     void process_view(Vrchannel* who, const Json& msg);
     void process_view_transfer_log(Vrchannel* who, Json& payload);
     void process_view_check_log(Vrchannel* who, Json& payload);
-    void process_request(Vrchannel* who, const Json& msg);
+    void process_request(Vrchannel* who, Json& msg);
     bool check_retransmitted_request(const String& client_uid,
                                      unsigned client_seqno,
                                      Json& response) const;

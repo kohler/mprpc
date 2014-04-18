@@ -22,6 +22,7 @@ Vrreplica::Vrreplica(Vrstate* state, const Vrview& config,
     // current view == just me
     cur_view_ = Vrview::make_singular(config.group_name(), uid());
     next_view_ = cur_view_;
+    between_views_ = false;
     listen_loop();
 }
 
@@ -39,7 +40,7 @@ String Vrreplica::unparse_view_state() const {
     if (next_view_.viewno != cur_view_.viewno) {
         sa << "<v#" << next_view_.viewno
            << (next_view_.me_primary() ? "p" : "")
-           << ":" << next_view_.nacked;
+           << ":" << next_view_.nprepared;
         if (next_view_.me_primary())
             sa << "." << next_view_.nconfirmed;
         sa << ">";
@@ -62,7 +63,7 @@ String Vrreplica::unparse_view_state() const {
     return sa.take_string();
 }
 
-void Vrreplica::check_logno() const {
+void Vrreplica::verify_state() const {
     if (decideno_ > commitno_
         || decideno_ > ackno_
         || commitno_ > ackno_
@@ -73,6 +74,10 @@ void Vrreplica::check_logno() const {
     assert(decideno_ <= ackno_);
     assert(commitno_ <= ackno_);
     assert(ackno_ <= sackno_);
+
+    assert(next_view_.viewno != cur_view_.viewno || !between_views_);
+    for (auto it = next_view_.members.begin(); it != next_view_.members.end(); ++it)
+        assert(it->uid == uid() || it->prepared() == it->has_ackno());
 }
 
 tamed void Vrreplica::listen_loop() {
@@ -203,7 +208,7 @@ tamed void Vrreplica::connection_loop(Vrchannel* peer) {
     tamed { Json msg; }
 
     while (1) {
-        check_logno();
+        verify_state();
         msg.clear();
         twait { peer->receive(make_event(msg)); }
         if (!msg || !msg.is_a() || msg.size() < 2)
@@ -299,16 +304,17 @@ void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
         want_send = 0;
     }
 
-    if (cur_view_.nacked > cur_view_.f()
-        && next_view_.nacked > next_view_.f()
+    if (cur_view_.nprepared > cur_view_.f()
+        && next_view_.nprepared > next_view_.f()
         && (next_view_.me_primary()
-            || next_view_.primary().acked)
-        && !next_view_sent_confirm_) {
+            || next_view_.primary().prepared())
+        && cur_view_.viewno != next_view_.viewno
+        && !between_views_) {
         if (next_view_.me_primary())
             next_view_.prepare(uid(), Json::object("confirm", true), true);
         else
             send_view(next_view_.primary().uid);
-        next_view_sent_confirm_ = true;
+        between_views_ = true;
     }
     if (next_view_.nconfirmed > next_view_.f()
         && next_view_.me_primary()
@@ -338,10 +344,11 @@ void Vrreplica::process_view_transfer_log(Vrchannel* who, Json& payload) {
     // checking more difficult, since it effectively can make a log entry
     // appear to be committed before its time.
     //
-    // Example: 5 replicas, n0-n4. n0, n1 have l#1<@v#0>, n2, n3 have
-    // l#1<@v#1>. New master is n3. If, during the view change, n0's entry
-    // arrives first, and is added to n3's true log, then all of a sudden it
-    // looks like l#1<@v#0> was replicated 3 times, i.e., it committed.
+    // Example: 5 replicas, n0-n4. n0 & n1 have l#1<@v#0>, n2 & n3 have
+    // l#1<@v#1>, n4 has neither. New master is n4. If, during the view
+    // change, n0's entry arrives first, and is added to n4's true log, then
+    // all of a sudden it looks like l#1<@v#0> was replicated 3 times, i.e.,
+    // it committed.
     for (int i = 0; i != log.size(); i += 4, ++logno) {
         Vrlogitem li(log[i].to_u(), log[i+1].to_s(), log[i+2].to_u(), log[i+3]);
         if (logno < log_.first())
@@ -409,15 +416,15 @@ void Vrreplica::primary_adopt_view_change(Vrchannel* who) {
     ackno_ = sackno_ = last_logno();
 
     // actually switch to new view
-    next_view_.account_all_acks();
     cur_view_ = next_view_;
+    between_views_ = false;
     process_at_number(cur_view_.viewno, at_view_);
     primary_keepalive_loop();
 
     // send log to replicas
     for (auto it = cur_view_.members.begin();
          it != cur_view_.members.end(); ++it)
-        if (it->confirmed)
+        if (it->confirmed())
             send_commit_log(&*it, it->ackno(), last_logno());
 
     log_connection(who) << uid() << " adopts view " << unparse_view_state() << "\n";
@@ -436,10 +443,10 @@ Json Vrreplica::view_payload(const String& peer_uid) {
     auto it = next_view_.members.begin();
     while (it != next_view_.members.end() && it->uid != peer_uid)
         ++it;
-    if (it != next_view_.members.end() && it->acked)
+    if (it != next_view_.members.end() && it->prepared())
         payload["ack"] = true;
-    if (cur_view_.nacked > cur_view_.f()
-        && next_view_.nacked > next_view_.f()
+    if (cur_view_.nprepared > cur_view_.f()
+        && next_view_.nprepared > next_view_.f()
         && next_view_.viewno != cur_view_.viewno
         && !next_view_.me_primary()
         && next_view_.primary().has_ackno()
@@ -502,7 +509,7 @@ void Vrreplica::process_join(Vrchannel* who, const Json&) {
 
 void Vrreplica::initialize_next_view() {
     cur_view_.clear_preparation(false);
-    next_view_sent_confirm_ = false;
+    between_views_ = false;
     next_log_.clear();
     Json my_msg = Json::object("ackno", ackno_.value());
     cur_view_.prepare(uid(), my_msg, false);
@@ -525,13 +532,13 @@ tamed void Vrreplica::start_view_change() {
     }
 }
 
-void Vrreplica::process_request(Vrchannel* who, const Json& msg) {
+void Vrreplica::process_request(Vrchannel* who, Json& msg) {
     bool retransmit = msg[2].is_b() && msg[2];
     int seqno_offset = msg[2].is_b() ? 3 : 2;
     if (msg.size() <= seqno_offset || !msg[seqno_offset].is_u()) {
         who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
-    } else if (!is_primary() || next_view_sent_confirm()) {
+    } else if (!is_primary() || between_views_) {
         send_view(who, Json(), msg[1]);
         return;
     }
@@ -545,10 +552,11 @@ void Vrreplica::process_request(Vrchannel* who, const Json& msg) {
         if (!retransmit
             || !check_retransmitted_request(client_uid, client_seqno, response))
             log_.emplace_back(cur_view_.viewno, client_uid, client_seqno,
-                              msg[i]);
+                              std::move(msg[i]));
     process_at_number(from_storeno, at_store_);
-    // our log is valid to the end of the current log
+    // our log is valid to its end
     ackno_ = sackno_ = last_logno();
+    cur_view_.primary().set_ackno(ackno_);
 
     // broadcast request to backups
     Json commit_msg = commit_log_message(from_storeno, last_logno());
@@ -562,9 +570,6 @@ void Vrreplica::process_request(Vrchannel* who, const Json& msg) {
         else
             send_commit_log(&*it, it->ackno(), last_logno());
     commit_sent_at_ = tamer::drecent();
-
-    // the new requests are replicated only here
-    cur_view_.account_ack(&cur_view_.primary(), last_logno());
 
     // perhaps there is a response to a retransmitted request
     if (response) {
@@ -628,11 +633,12 @@ void Vrreplica::process_commit(Vrchannel* who, Json& msg) {
     }
 
     viewnumber_t view(msg[2].to_u());
-    if (view == next_view_.viewno && next_view_sent_confirm()) {
+    if (view == next_view_.viewno && between_views_) {
         // after confirm is sent, a commit acts to change the view
         assert(!next_view_.me_primary()
                && next_view_.primary().uid == who->remote_uid());
         cur_view_ = next_view_;
+        between_views_ = false;
         process_at_number(cur_view_.viewno, at_view_);
         // acknowledge `commitno_` until log confirmed
         ackno_ = sackno_ = commitno_;
@@ -642,7 +648,7 @@ void Vrreplica::process_commit(Vrchannel* who, Json& msg) {
         // members of the view; broadcast view to collect acknowledgements
         broadcast_view();
         return;
-    } else if (view != cur_view_.viewno || next_view_sent_confirm()) {
+    } else if (view != cur_view_.viewno || between_views_) {
         // odd view
         send_view(who);
         return;
@@ -730,7 +736,7 @@ void Vrreplica::process_ack(Vrchannel* who, const Json& msg) {
         who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
     } else if (msg[2].to_u() != cur_view_.viewno
-               || next_view_sent_confirm()
+               || between_views_
                || !(peer = cur_view_.find_pointer(who->remote_uid()))) {
         send_view(who);
         return;
@@ -739,14 +745,14 @@ void Vrreplica::process_ack(Vrchannel* who, const Json& msg) {
     // process acknowledgement
     lognumber_t ackno = msg[3].to_u();
     lognumber_t sackno = ackno + msg[4].to_u();
-    cur_view_.account_ack(peer, ackno);
-    assert(!cur_view_.account_all_acks());
+    peer->set_ackno(ackno);
 
     // update commitno and decideno
-    if (peer->ackno_count() > cur_view_.f()
+    unsigned count = cur_view_.count_acks(ackno);
+    if (count > cur_view_.f()
         && ackno > commitno_)
         process_ack_update_commitno(ackno);
-    if (peer->ackno_count() == cur_view_.size()
+    if (count == cur_view_.size()
         && ackno > decideno_)
         update_decideno(ackno);
 
@@ -799,7 +805,7 @@ tamed void Vrreplica::primary_keepalive_loop() {
     while (1) {
         twait { tamer::at_delay(k_.primary_keepalive_timeout / 4,
                                 make_event()); }
-        if (!in_view(view))
+        if (cur_view_.viewno != view || between_views_)
             break;
         if (tamer::drecent() - commit_sent_at_
               >= k_.primary_keepalive_timeout / 2

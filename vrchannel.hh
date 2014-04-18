@@ -81,13 +81,13 @@ inline void Vrchannel::send(Json msg) {
 
 inline Logger& log_connection(const String& local_uid,
                               const String& remote_uid,
-                              const char* ctype = " <-> ") {
-    return logger() << tamer::recent() << ":"           << local_uid << ctype
+                              const char* ctype = " -- ") {
+    return logger() << tamer::recent() << ":" << local_uid << ctype
                     << (remote_uid ? remote_uid : "[]") << ": ";
 }
 
 inline Logger& log_connection(const Vrchannel* ep,
-                              const char* ctype = " <-> ") {
+                              const char* ctype = " -- ") {
     logger() << tamer::recent() << ":" << ep->local_uid() << ctype;
     if (const String& x = ep->remote_uid())
         logger << x;

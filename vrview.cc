@@ -5,7 +5,7 @@
 Vrconstants vrconstants;
 
 Vrview::Vrview()
-    : viewno(0), primary_index(0), my_index(-1), nacked(0), nconfirmed(0) {
+    : viewno(0), primary_index(0), my_index(-1), nprepared(0), nconfirmed(0) {
 }
 
 Vrview Vrview::make_singular(String group_name, String peer_uid) {
@@ -13,7 +13,7 @@ Vrview Vrview::make_singular(String group_name, String peer_uid) {
     v.group_name_ = std::move(group_name);
     v.members.push_back(member_type(std::move(peer_uid), Json()));
     v.primary_index = v.my_index = 0;
-    v.account_ack(&v.members.back(), 0);
+    v.primary().set_ackno(0);
     return v;
 }
 
@@ -31,7 +31,7 @@ bool Vrview::assign_parse(Json msg, bool require_view, const String& my_uid) {
     viewno = 0;
     primary_index = my_index = -1;
     members.clear();
-    nacked = nconfirmed = 0;
+    nprepared = nconfirmed = 0;
 
     if (!msg.is_o())
         return false;
@@ -130,16 +130,16 @@ bool Vrview::shared_quorum(const Vrview& x) const {
 
 void Vrview::prepare(String uid, const Json& payload, bool is_next) {
     if (auto it = find_pointer(uid)) {
-        if (!it->acked) {
-            it->acked = true;
-            ++nacked;
+        if (!it->prepared_) {
+            it->prepared_ = true;
+            ++nprepared;
         }
-        if (payload["confirm"] && !it->confirmed) {
-            it->confirmed = true;
+        if (payload["confirm"] && !it->confirmed_) {
+            it->confirmed_ = true;
             ++nconfirmed;
         }
         if (!payload["ackno"].is_null() && is_next)
-            account_ack(it, payload["ackno"].to_u());
+            it->set_ackno(payload["ackno"].to_u());
     }
 }
 
@@ -158,9 +158,9 @@ void Vrview::reduce_matching_logno(lognumber_t logno) {
 }
 
 void Vrview::clear_preparation(bool is_next) {
-    nacked = nconfirmed = 0;
+    nprepared = nconfirmed = 0;
     for (auto& it : members)
-        it.acked = it.confirmed = false;
+        it.prepared_ = it.confirmed_ = false;
     if (is_next)
         for (auto& it : members)
             it.has_ackno_ = it.has_matching_logno_ = false;
@@ -194,7 +194,7 @@ Json Vrview::acks_json() const {
     for (auto it = members.begin(); it != members.end(); ++it) {
         Json x = Json::array(it->uid);
         if (it->has_ackno_)
-            x.push_back_list(it->ackno_.value(), it->ackno_count_);
+            x.push_back(it->ackno_.value());
         bool is_primary = it - members.begin() == primary_index;
         bool is_me = it - members.begin() == my_index;
         if (is_primary || is_me)
@@ -204,42 +204,18 @@ Json Vrview::acks_json() const {
     return j;
 }
 
-void Vrview::account_ack(member_type* peer, lognumber_t ackno) {
-    bool has_old_ackno = peer->has_ackno();
-    lognumber_t old_ackno = peer->ackno();
-    if (!has_old_ackno || old_ackno <= ackno) {
-        peer->has_ackno_ = true;
-        peer->ackno_ = ackno;
-        peer->ackno_count_ = 0;
-        if (!has_old_ackno || old_ackno != ackno)
-            peer->ackno_changed_at_ = tamer::drecent();
-        for (auto it = members.begin(); it != members.end(); ++it)
-            if (it->has_ackno_) {
-                if (it->ackno_ <= ackno
-                    && (!has_old_ackno || it->ackno_ > old_ackno)
-                    && &*it != peer)
-                    ++it->ackno_count_;
-                if (ackno <= it->ackno_)
-                    ++peer->ackno_count_;
-            }
-    } else if (old_ackno > ackno) {
-        peer->ackno_ = ackno;
-        account_all_acks();
-    }
+unsigned Vrview::count_acks(lognumber_t ackno) const {
+    unsigned count = 0;
+    for (auto it = members.begin(); it != members.end(); ++it)
+        if (it->has_ackno() && it->ackno() >= ackno)
+            ++count;
+    return count;
 }
 
-bool Vrview::account_all_acks() {
-    bool changed = false;
-    //Json cj = acks_json();
-    for (auto it = members.begin(); it != members.end(); ++it) {
-        unsigned old_ackno_count = it->ackno_count_;
-        it->ackno_count_ = 0;
-        for (auto jt = members.begin(); jt != members.end(); ++jt)
-            if (it->has_ackno_ && jt->has_ackno_
-                && it->ackno_ <= jt->ackno_)
-                ++it->ackno_count_;
-        changed = changed || it->ackno_count_ != old_ackno_count;
+void Vrview::member_type::set_ackno(lognumber_t ackno) {
+    if (!has_ackno_ || ackno_ != ackno) {
+        has_ackno_ = true;
+        ackno_ = ackno;
+        ackno_changed_at_ = tamer::drecent();
     }
-    //std::cerr << (changed ? "! " : ". ") << " => " << cj << " => " << acks_json() << "\n";
-    return changed;
 }
