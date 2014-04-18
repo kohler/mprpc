@@ -96,6 +96,7 @@ class Vrreplica {
     Vrlog<Vrlogitem, lognumber_t::value_type> log_;
 
     bool between_views_;
+    bool between_views_primary_sent_;
     Vrlog<Vrlogitem, lognumber_t::value_type> next_log_;
 
     bool stopped_;
@@ -125,10 +126,11 @@ class Vrreplica {
 
     tamed void send_peer(String peer_uid, Json msg);
 
-    Json view_payload(const String& peer_uid);
-    void send_view(Vrchannel* who, Json payload = Json(), Json seqno = Json());
-    tamed void send_view(String peer_uid);
-    void broadcast_view();
+    inline String view_why(const String& why) const;
+    Json view_payload(const String& peer_uid, const String& why);
+    void send_view(Vrchannel* who, const String& why, Json payload = Json());
+    tamed void send_view(String peer_uid, String why);
+    void broadcast_view(const String& why);
 
     void initialize_next_view();
     tamed void start_view_change();
