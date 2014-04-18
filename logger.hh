@@ -1,6 +1,7 @@
 #ifndef LOGGER_HH
 #define LOGGER_HH 1
 #include <iostream>
+class StringAccum;
 
 class Logger {
   public:
@@ -61,6 +62,7 @@ inline void Logger::set_frequency(unsigned frequency) {
 
 
 std::ostream& operator<<(std::ostream& str, const timeval& tv);
+StringAccum& operator<<(StringAccum& sa, const timeval& tv);
 
 template <typename T>
 inline Logger& operator<<(Logger& logger, T&& x) {
