@@ -94,7 +94,7 @@ Vrtestchannel* Vrtestnode::connect(Vrtestnode* n) {
 
 Vrtestchannel::Vrtestchannel(Vrtestnode* from, Vrtestnode* to, double loss_p)
     : Vrchannel(from->uid(), to->uid()), from_node_(from),
-      delay_(0.05 + 0.0125 * from->collection()->rand01()), loss_p_(loss_p) {
+      delay_(0.001/*5 + 0.0125 * from->collection()->rand01()*/), loss_p_(loss_p) {
     assert(loss_p_ >= 0 && loss_p_ <= 1);
     coroutine();
 }
@@ -302,7 +302,7 @@ void Vrtestcollection::check() {
             if (itemmap[i])
                 for (size_t j = 0; j != i; ++j)
                     if (itemmap[j]
-                        && itemmap[i]->viewno == itemmap[j]->viewno) {
+                        && itemmap[i]->viewno() == itemmap[j]->viewno()) {
                         ++commitmap[j];
                         break;
                     }
@@ -346,9 +346,9 @@ void Vrtestcollection::check() {
             const Vrlogitem& li = r->log_entry(first);
             const Vrlogitem& cli = committed_log_[first];
             if (!li.empty()) {
-                assert(cli.viewno != li.viewno || cli.request_equals(li));
+                assert(cli.viewno() != li.viewno() || cli.request_equals(li));
                 if (first < commit_counts.last()
-                    && cli.viewno == li.viewno)
+                    && cli.viewno() == li.viewno())
                     ++commit_counts[first];
             }
         }

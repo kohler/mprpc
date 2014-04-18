@@ -21,11 +21,16 @@ class Vrreplica {
     String uid() const {
         return me_->local_uid();
     }
-    viewnumber_t view_number() const {
+    viewnumber_t viewno() const {
         return cur_view_.viewno;
     }
     const Vrview& current_view() const {
         return cur_view_;
+    }
+    bool between_views() const {
+        return cur_view_.viewno != next_view_.viewno
+            && cur_view_.nprepared > cur_view_.f()
+            && next_view_.nprepared > next_view_.f();
     }
 
     tamed void connect(String peer_uid, event<> done);
@@ -95,8 +100,7 @@ class Vrreplica {
     lognumber_t sackno_;
     Vrlog<Vrlogitem, lognumber_t::value_type> log_;
 
-    bool between_views_;
-    bool between_views_primary_sent_;
+    bool view_confirm_sent_;
     Vrlog<Vrlogitem, lognumber_t::value_type> next_log_;
 
     bool stopped_;
@@ -127,8 +131,7 @@ class Vrreplica {
     tamed void send_peer(String peer_uid, Json msg);
 
     inline String view_why(const String& why) const;
-    Json view_payload(const String& peer_uid, const String& why);
-    void send_view(Vrchannel* who, const String& why, Json payload = Json());
+    void send_view(Vrchannel* who, const String& why);
     tamed void send_view(String peer_uid, String why);
     void broadcast_view(const String& why);
 

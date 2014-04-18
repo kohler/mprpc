@@ -12,7 +12,9 @@ typedef circular_int<unsigned> lognumber_t;
 typedef lognumber_t::difference_type lognumberdiff_t;
 
 struct Vrlogitem {
-    viewnumber_t viewno;
+  private:
+    viewnumber_t viewno_;
+  public:
     String client_uid;
     unsigned client_seqno;
     Json request;
@@ -21,11 +23,16 @@ struct Vrlogitem {
     Vrlogitem() {
     }
     Vrlogitem(viewnumber_t v, String cuid, unsigned cseqno, Json req)
-        : viewno(v), client_uid(std::move(cuid)), client_seqno(cseqno),
+        : viewno_(v), client_uid(std::move(cuid)), client_seqno(cseqno),
           request(std::move(req)) {
+        assert(cuid);
     }
     bool empty() const {
         return client_uid.empty();
+    }
+    viewnumber_t viewno() const {
+        assert(!empty());
+        return viewno_;
     }
     inline bool request_equals(const Vrlogitem& x) const;
 };
@@ -76,7 +83,7 @@ class Vrlog {
 
 inline bool Vrlogitem::request_equals(const Vrlogitem& x) const {
     return !empty()
-        && viewno == x.viewno
+        && viewno_ == x.viewno_
         && client_uid == x.client_uid
         && client_seqno == x.client_seqno
         && (request.is_primitive() || x.request.is_primitive()
