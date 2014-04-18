@@ -304,7 +304,7 @@ void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
         cur_view_.prepare(who->remote_uid(), payload, false);
         next_view_.prepare(who->remote_uid(), payload, true);
         broadcast_view(view_why("new"));
-        want_send = 1;
+        want_send = 0;
     }
 
     if (next_view_.me_primary()
