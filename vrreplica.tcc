@@ -331,7 +331,7 @@ void Vrreplica::process_view_transfer_log(Vrchannel* who, Json& payload) {
            && next_view_.me_primary());
     lognumber_t logno = payload["logno"].to_u();
     assert(logno <= last_logno());
-    const Json& log = payload["log"];
+    Json& log = payload["log"];
     lognumber_t matching_logno = logno + log.size();
 
     // Combine log from payload with current log. New entries go into
@@ -346,7 +346,8 @@ void Vrreplica::process_view_transfer_log(Vrchannel* who, Json& payload) {
     // all of a sudden it looks like l#1<@v#0> was replicated 3 times, i.e.,
     // it committed.
     for (int i = 0; i != log.size(); i += 4, ++logno) {
-        Vrlogitem li(log[i].to_u(), log[i+1].to_s(), log[i+2].to_u(), log[i+3]);
+        Vrlogitem li(log[i].to_u(), log[i+1].to_s(), log[i+2].to_u(),
+                     std::move(log[i+3]));
         assert(!li.empty());
         if (logno < log_.first())
             continue;
