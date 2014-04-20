@@ -302,17 +302,24 @@ void Vrtestcollection::check() {
             if (itemmap[i])
                 for (size_t j = 0; j != i; ++j)
                     if (itemmap[j]
-                        && itemmap[i]->viewno() == itemmap[j]->viewno()) {
+                        && itemmap[i]->request_equals(*itemmap[j])) {
                         ++commitmap[j];
                         break;
                     }
-        auto maxindex = std::max_element(commitmap.begin(), commitmap.end()) - commitmap.begin();
+        auto maxindex = std::max_element(commitmap.begin(), commitmap.end())
+            - commitmap.begin();
         if (commitmap[maxindex] <= f)
             break;
         committed_log_.push_back(replicas_[maxindex]->log_entry(commitno_));
         ++commitno_;
     }
-    // no one is allowed to think more has committed than has actually committed
+    // no one is allowed to think more has committed than has actually
+    // committed
+    if (max_commitno > commitno_) {
+        std::cerr << "check: commitno " << max_commitno << " is greater than real commitno " << commitno_ << "\n";
+        print_lognos();
+        print_log_position(commitno_);
+    }
     assert(max_commitno <= commitno_);
 
     // count # committed
@@ -348,7 +355,7 @@ void Vrtestcollection::check() {
             if (!li.empty()) {
                 assert(cli.viewno() != li.viewno() || cli.request_equals(li));
                 if (first < commit_counts.last()
-                    && cli.viewno() == li.viewno())
+                    && cli.request_equals(li))
                     ++commit_counts[first];
             }
         }

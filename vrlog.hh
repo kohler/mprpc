@@ -83,7 +83,6 @@ class Vrlog {
 
 inline bool Vrlogitem::request_equals(const Vrlogitem& x) const {
     return !empty()
-        && viewno_ == x.viewno_
         && client_uid == x.client_uid
         && client_seqno == x.client_seqno
         && (request.is_primitive() || x.request.is_primitive()

@@ -264,15 +264,17 @@ inline String Vrreplica::view_why(const String& why) const {
 }
 
 void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
-    Json payload = msg[2];
+    Json payload = msg[3];
     Vrview v;
-    if (!v.assign_parse(payload, true, uid())
+    if (!msg[2].is_u()
+        || !v.assign_parse(payload, true, uid())
         || !v.count(who->remote_uid())
         || v.group_name() != cur_view_.group_name()) {
         who->send(Json::array(Vrchannel::m_error, -msg[1]));
         return;
     }
 
+    viewnumber_t viewno = msg[2].to_u();
     viewnumberdiff_t vdiff = (viewnumberdiff_t) (v.viewno - next_view_.viewno);
     int vcompare = vdiff == 0 ? next_view_.compare(v) : 0;
     int want_send;
@@ -292,9 +294,9 @@ void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
         if (payload["log"]
             && next_view_.me_primary()) {
             if (cur_view_.viewno != next_view_.viewno)
-                process_view_transfer_log(who, payload);
+                process_view_transfer_log(who, viewno, payload);
             else
-                process_view_check_log(who, payload);
+                process_view_check_log(who, viewno, payload);
         }
         want_send = !payload["ack"] && !payload["confirm"];
     } else {
@@ -324,10 +326,11 @@ void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
         send_view(next_view_.primary().uid, view_why("confirm"));
 }
 
-void Vrreplica::process_view_transfer_log(Vrchannel* who, Json& payload) {
+void Vrreplica::process_view_transfer_log(Vrchannel* who, viewnumber_t viewno,
+                                          Json& payload) {
     assert(payload["logno"].is_u()
            && payload["log"].is_a()
-           && payload["log"].size() % 4 == 0
+           && payload["log"].size() % 3 == 0
            && next_view_.me_primary());
     lognumber_t logno = payload["logno"].to_u();
     assert(logno <= last_logno());
@@ -345,9 +348,9 @@ void Vrreplica::process_view_transfer_log(Vrchannel* who, Json& payload) {
     // change, n0's entry arrives first, and is added to n4's true log, then
     // all of a sudden it looks like l#1<@v#0> was replicated 3 times, i.e.,
     // it committed.
-    for (int i = 0; i != log.size(); i += 4, ++logno) {
-        Vrlogitem li(log[i].to_u(), log[i+1].to_s(), log[i+2].to_u(),
-                     std::move(log[i+3]));
+    for (int i = 0; i != log.size(); i += 3, ++logno) {
+        Vrlogitem li(viewno, log[i].to_s(), log[i+1].to_u(),
+                     std::move(log[i+2]));
         assert(!li.empty());
         if (logno < log_.first())
             continue;
@@ -376,16 +379,16 @@ void Vrreplica::process_view_transfer_log(Vrchannel* who, Json& payload) {
     next_view_.set_matching_logno(who->remote_uid(), matching_logno);
 }
 
-void Vrreplica::process_view_check_log(Vrchannel* who, Json& payload) {
+void Vrreplica::process_view_check_log(Vrchannel* who, viewnumber_t viewno,
+                                       Json& payload) {
     assert(payload["logno"].is_u()
            && payload["log"].is_a()
-           && payload["log"].size() % 4 == 0);
+           && payload["log"].size() % 3 == 0);
     lognumber_t logno = payload["logno"].to_u();
     assert(logno <= last_logno());
     const Json& log = payload["log"];
-    for (int i = 0; i != log.size() && logno < last_logno(); i += 4, ++logno)
-        if (logno >= log_.first()
-            && log[i].to_u() != log_[logno].viewno())
+    for (int i = 0; i != log.size() && logno < last_logno(); i += 3, ++logno)
+        if (logno >= log_.first() && viewno != log_[logno].viewno())
             break;
     next_view_.set_matching_logno(who->remote_uid(), logno);
 }
@@ -450,8 +453,7 @@ void Vrreplica::send_view(Vrchannel* who, const String& why) {
         Json log = Json::array();
         for (; logno < last_logno() && !log_[logno].empty(); ++logno) {
             auto& li = log_[logno];
-            log.push_back_list(li.viewno().value(),
-                               li.client_uid,
+            log.push_back_list(li.client_uid,
                                li.client_seqno,
                                li.request);
         }
@@ -459,7 +461,8 @@ void Vrreplica::send_view(Vrchannel* who, const String& why) {
         view_confirm_sent_ = true;
     }
 
-    Json msg = Json::array(Vrchannel::m_view, Json(), std::move(payload));
+    Json msg = Json::array(Vrchannel::m_view, Json(),
+                           cur_view_.viewno.value(), std::move(payload));
     who->send(msg);
     //log_send(who) << msg << " " << unparse_view_state() << "\n";
 }
@@ -596,12 +599,11 @@ Json Vrreplica::commit_log_message(lognumber_t first, lognumber_t last) const {
                            commitno_ - decideno_);
     first = std::max(first, log_.first());
     if (first < last) {
-        msg.reserve(msg.size() + 1 + (last - first) * 4);
+        msg.reserve(msg.size() + 1 + (last - first) * 3);
         msg.push_back(first.value());
         for (lognumber_t i = first; i != last; ++i) {
             const Vrlogitem& li = log_[i];
-            msg.push_back_list(cur_view_.viewno - li.viewno(),
-                               li.client_uid, li.client_seqno, li.request);
+            msg.push_back_list(li.client_uid, li.client_seqno, li.request);
         }
     }
     return msg;
@@ -616,7 +618,7 @@ void Vrreplica::send_commit_log(Vrview::member_type* peer,
 
 void Vrreplica::process_commit(Vrchannel* who, Json& msg) {
     if (msg.size() < 5
-        || (msg.size() > 5 && (msg.size() - 6) % 4 != 0)
+        || (msg.size() > 5 && (msg.size() - 6) % 3 != 0)
         || !msg[2].is_u()
         || !msg[3].is_u()
         || (msg.size() > 4 && !msg[4].is_u())) {
@@ -650,7 +652,7 @@ void Vrreplica::process_commit(Vrchannel* who, Json& msg) {
     primary_received_at_ = tamer::drecent();
 
     lognumber_t old_ackno = ackno_;
-    if (msg.size() >= 10)
+    if (msg.size() >= 9)
         process_commit_log(msg);
 
     lognumber_t commitno = msg[3].to_u();
@@ -681,7 +683,7 @@ void Vrreplica::process_commit(Vrchannel* who, Json& msg) {
 
 void Vrreplica::process_commit_log(Json& msg) {
     lognumber_t logno = msg[5].to_u();
-    size_t nlog = (msg.size() - 6) / 4;
+    size_t nlog = (msg.size() - 6) / 3;
 
     // create log gap if necessary, but nothing huge
     if (logno > last_logno() + 2048)
@@ -691,15 +693,13 @@ void Vrreplica::process_commit_log(Json& msg) {
 
     // apply log items
     Json* logdata = msg.array_data() + 6;
-    for (lognumber_t i = logno; i != logno + nlog; logdata += 4, ++i)
+    for (lognumber_t i = logno; i != logno + nlog; logdata += 3, ++i)
         if (i >= log_.first()) {
-            Vrlogitem li(cur_view_.viewno - logdata[0].to_u(),
-                         logdata[1].to_s(), logdata[2].to_u(),
-                         std::move(logdata[3]));
+            Vrlogitem li(cur_view_.viewno, logdata[0].to_s(), logdata[1].to_u(),
+                         std::move(logdata[2]));
             if (i == log_.last())
                 log_.push_back(std::move(li));
-            else if (log_[i].empty()
-                     || log_[i].viewno() < cur_view_.viewno)
+            else
                 log_[i] = std::move(li);
         }
 
