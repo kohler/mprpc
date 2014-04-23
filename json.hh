@@ -251,8 +251,10 @@ class Json {
 
     inline Json* array_data();
     inline const Json* array_data() const;
+    inline const Json* array_cdata() const;
     inline Json* end_array_data();
     inline const Json* end_array_data() const;
+    inline const Json* end_array_cdata() const;
 
     // Iteration
     inline const_object_iterator obegin() const;
@@ -2538,6 +2540,7 @@ inline Json::array_iterator Json::erase(array_iterator position) {
 
 inline Json* Json::array_data() {
     precondition(is_null() || is_array());
+    uniqueify_array(false, 0);
     return u_.a.x ? u_.a.x->a : 0;
 }
 
@@ -2546,12 +2549,23 @@ inline const Json* Json::array_data() const {
     return u_.a.x ? u_.a.x->a : 0;
 }
 
+inline const Json* Json::array_cdata() const {
+    precondition(is_null() || is_array());
+    return u_.a.x ? u_.a.x->a : 0;
+}
+
 inline Json* Json::end_array_data() {
     precondition(is_null() || is_array());
+    uniqueify_array(false, 0);
     return u_.a.x ? u_.a.x->a + u_.a.x->size : 0;
 }
 
 inline const Json* Json::end_array_data() const {
+    precondition(is_null() || is_array());
+    return u_.a.x ? u_.a.x->a + u_.a.x->size : 0;
+}
+
+inline const Json* Json::end_array_cdata() const {
     precondition(is_null() || is_array());
     return u_.a.x ? u_.a.x->a + u_.a.x->size : 0;
 }
