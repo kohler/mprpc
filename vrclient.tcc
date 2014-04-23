@@ -114,7 +114,6 @@ tamed void Vrclient::connect(tamer::event<> done) {
         String peer_uid;
         Vrchannel* peer;
         bool ok;
-        int tries = 0;
         tamer::rendezvous<> r;
         tamer::ref_monitor mon(ref_);
     }
@@ -127,11 +126,6 @@ tamed void Vrclient::connect(tamer::event<> done) {
     while (mon) {
         peer = nullptr;
         ok = false;
-
-        // every 8th try, look for someone else
-        if (tries % 8 == 7 && view_.size())
-            peer_uid = random_replica_uid();
-        ++tries;
 
         twait {
             me_->connect(peer_uid, peer_names_[peer_uid],
@@ -153,5 +147,8 @@ tamed void Vrclient::connect(tamer::event<> done) {
         }
 
         delete peer;
+        // look for someone else
+        if (view_.size())
+            peer_uid = random_replica_uid();
     }
 }
