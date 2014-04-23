@@ -1492,7 +1492,7 @@ template <typename P> inline Json::Json(const Json_proxy_base<P>& x)
 /** @overload */
 inline Json::Json(Json&& x)
     : u_(std::move(x.u_)) {
-    x.u_.x.type = 0;
+    memset(&x, 0, sizeof(x));
 }
 #endif
 /** @brief Construct simple Json values. */
