@@ -61,7 +61,7 @@ tamed void Vrclient::connection_loop(Vrchannel* peer) {
             continue;
         log_receive(peer) << msg << "\n";
         if (msg[0] == Vrchannel::m_handshake)
-            peer->process_handshake(msg, true);
+            peer->process_handshake(msg);
         else if (msg[0] == Vrchannel::m_response)
             process_response(msg);
         else if (msg[0] == Vrchannel::m_view)

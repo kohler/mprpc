@@ -215,7 +215,7 @@ tamed void Vrreplica::connection_loop(Vrchannel* peer) {
             continue;
         log_receive(peer) << msg << " " << unparse_view_state() << "\n";
         if (msg[0] == Vrchannel::m_handshake)
-            peer->process_handshake(msg, true);
+            peer->process_handshake(msg);
         else if (msg[0] == Vrchannel::m_request)
             process_request(peer, msg);
         else if (msg[0] == Vrchannel::m_commit)

@@ -35,10 +35,12 @@ class Vrchannel {
                          tamer::event<Vrchannel*> done);
     virtual void receive_connection(tamer::event<Vrchannel*> done);
 
+    void send_handshake(bool want_reply);
+    bool check_handshake(const Json& msg) const;
+    void process_handshake(const Json& msg);
+
     void handshake(bool active_end, double message_timeout, double timeout,
                    tamer::event<bool> done);
-    bool check_handshake(const Json& msg) const;
-    void process_handshake(const Json& msg, bool reply);
 
     inline void send(Json msg);
     virtual void send(Json msg, tamer::event<> done);

@@ -38,19 +38,15 @@ tamed void Vrchannel::handshake(bool active_end, double message_timeout,
 
     // handshake loop with retry
     while (1) {
-        if (active_end) {
-            Json handshake_msg = Json::array(m_handshake, Json::null,
-                                             local_uid(), remote_uid(),
-                                             connection_uid());
-            log_send(this) << handshake_msg << "\n";
-            send(handshake_msg);
-        }
+        if (active_end)
+            send_handshake(true);
         twait {
             receive(tamer::add_timeout(message_timeout,
                                        make_event(msg),
                                        Json(false)));
         }
-        if (!msg.is_bool() || tamer::drecent() >= start_time + timeout)
+        if (!msg.is_bool()
+            || tamer::drecent() >= start_time + timeout)
             break;
     }
 
@@ -58,7 +54,7 @@ tamed void Vrchannel::handshake(bool active_end, double message_timeout,
         /* caller has given up, maybe channel is dead */;
     else if (check_handshake(msg)) {
         log_receive(this) << msg << "\n";
-        process_handshake(msg, !active_end);
+        process_handshake(msg);
         done(true);
     } else if (!msg) { // null or false
         log_receive(this) << "handshake timeout\n";
@@ -88,15 +84,22 @@ bool Vrchannel::check_handshake(const Json& msg) const {
             || msg[4].to_s() == connection_uid());
 }
 
-void Vrchannel::process_handshake(const Json& msg, bool reply) {
+void Vrchannel::send_handshake(bool want_reply) {
+    Json msg = Json::array(m_handshake, Json::null,
+                           local_uid(), remote_uid(), connection_uid(),
+                           want_reply);
+    log_send(this) << msg << "\n";
+    send(std::move(msg));
+}
+
+void Vrchannel::process_handshake(const Json& msg) {
     assert(check_handshake(msg));
     if (remote_uid_.empty())
         remote_uid_ = msg[2].to_s();
     if (connection_uid_.empty())
         connection_uid_ = msg[4].to_s();
-    if (reply)
-        send(Json::array(m_handshake, msg[1],
-                         local_uid(), remote_uid(), connection_uid()));
+    if (msg[5])
+        send_handshake(false);
 }
 
 void Vrchannel::send(Json, tamer::event<>) {
