@@ -22,8 +22,14 @@ Vrnetlistener::Vrnetlistener(String local_uid, Json peer_name,
     : Vrchannel(std::move(local_uid), String()), rg_(rg) {
     if (peer_name && peer_name["port"].is_u())
         fd_ = tamer::tcp_listen(peer_name["port"].to_u());
-    else if (peer_name && peer_name["path"].is_s())
+    else if (peer_name && peer_name["path"].is_s()) {
+        String path = peer_name["path"].to_s();
+        struct stat st;
+        int r = stat(path.c_str(), &st);
+        if (r == 0 && S_ISSOCK(st.st_mode))
+            /* remove it */;
         fd_ = tamer::unix_stream_listen(peer_name["path"].to_s());
+    }
 }
 
 Vrnetlistener::~Vrnetlistener() {
