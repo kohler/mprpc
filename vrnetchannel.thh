@@ -22,6 +22,8 @@ class Vrnetlistener : public Vrchannel {
   private:
     tamer::fd fd_;
     std::mt19937& rg_;
+
+    tamed void complete_unix_listen(String path);
 };
 
 #endif

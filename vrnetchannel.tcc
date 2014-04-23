@@ -22,17 +22,23 @@ Vrnetlistener::Vrnetlistener(String local_uid, Json peer_name,
     : Vrchannel(std::move(local_uid), String()), rg_(rg) {
     if (peer_name && peer_name["port"].is_u())
         fd_ = tamer::tcp_listen(peer_name["port"].to_u());
-    else if (peer_name && peer_name["path"].is_s()) {
-        String path = peer_name["path"].to_s();
-        struct stat st;
-        int r = stat(path.c_str(), &st);
-        if (r == 0 && S_ISSOCK(st.st_mode))
-            /* remove it */;
-        fd_ = tamer::unix_stream_listen(peer_name["path"].to_s());
-    }
+    else if (peer_name && peer_name["path"].is_s())
+        complete_unix_listen(peer_name["path"].to_s());
 }
 
 Vrnetlistener::~Vrnetlistener() {
+}
+
+tamed void Vrnetlistener::complete_unix_listen(String path) {
+    tvars { struct stat st; tamer::fd checkfd; }
+    // Remove an old socket that's no longer connected.
+    if (stat(path.c_str(), &st) == 0
+        && S_ISSOCK(st.st_mode)) {
+        twait { tamer::unix_stream_connect(path, tamer::make_event(checkfd)); }
+        if (checkfd.error() == -ECONNREFUSED)
+            unlink(path.c_str());
+    }
+    fd_ = tamer::unix_stream_listen(path);
 }
 
 tamed void Vrnetlistener::connect(String peer_uid, Json peer_name,
