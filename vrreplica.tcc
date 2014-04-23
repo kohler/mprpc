@@ -505,10 +505,13 @@ tamed void Vrreplica::send_view(String peer_uid, bool lonely, String why) {
 }
 
 void Vrreplica::broadcast_view(const String& why, bool lonely) {
-    for (auto it = next_view_.members.begin();
-         it != next_view_.members.end(); ++it)
+    for (auto it = next_view_.begin(); it != next_view_.end(); ++it)
         if (&next_view_.primary() == &*it
             || !it->prepared())
+            send_view(it->uid, lonely, why);
+    for (auto it = cur_view_.begin(); it != cur_view_.end(); ++it)
+        if (!it->prepared()
+            && !next_view_.find_pointer(it->uid))
             send_view(it->uid, lonely, why);
 }
 
