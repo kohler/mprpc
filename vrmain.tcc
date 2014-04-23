@@ -7,7 +7,7 @@
 #include "fsstate.hh"
 #include "clp.h"
 
-Logger logger(std::cout);
+Logger logger(std::cerr);
 
 static String make_replica_uid() {
     static int counter;
@@ -119,7 +119,11 @@ tamed void run_fsclientreq(Vrclient* client, Json clientreq) {
     tamed { Json response; }
     twait { client->connect(make_event()); }
     twait { client->request(std::move(clientreq), make_event(response)); }
-    std::cout << response << "\n";
+    if (response.is_s())
+        std::cout << response.to_s()
+                  << (response && response.to_s().back() == '\n' ? "" : "\n");
+    else
+        std::cout << response << "\n";
     delete client;
 }
 
