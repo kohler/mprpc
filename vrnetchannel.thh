@@ -6,7 +6,7 @@
 
 class Vrnetlistener : public Vrchannel {
   public:
-    Vrnetlistener(String local_uid, unsigned port, std::mt19937& rg);
+    Vrnetlistener(String local_uid, Json peer_name, std::mt19937& rg);
     ~Vrnetlistener();
 
     inline bool ok() const {
@@ -21,7 +21,6 @@ class Vrnetlistener : public Vrchannel {
 
   private:
     tamer::fd fd_;
-    unsigned port_;
     std::mt19937& rg_;
 };
 

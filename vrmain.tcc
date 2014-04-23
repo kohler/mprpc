@@ -98,8 +98,8 @@ void run_fsreplica(const Vrview& config, String replicaname) {
     vrconstants.trim_log = false;
 
     auto my_mem = config.find_pointer(replicaname);
-    assert(my_mem && my_mem->peer_name["port"].is_u());
-    Vrnetlistener* my_conn = new Vrnetlistener(replicaname, my_mem->peer_name["port"].to_u(), rg);
+    assert(my_mem);
+    Vrnetlistener* my_conn = new Vrnetlistener(replicaname, my_mem->peer_name, rg);
     assert(my_conn->ok());
     Vrreplica* me = new Vrreplica(new Fsstate, config, my_conn, rg);
     me->join(config, event<>());

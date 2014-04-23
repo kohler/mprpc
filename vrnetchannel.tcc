@@ -17,11 +17,13 @@ class Vrnetchannel : public Vrchannel {
 };
 
 
-Vrnetlistener::Vrnetlistener(String local_uid, unsigned port,
+Vrnetlistener::Vrnetlistener(String local_uid, Json peer_name,
                              std::mt19937& rg)
-    : Vrchannel(std::move(local_uid), String()), port_(port), rg_(rg) {
-    if (port)
-        fd_ = tamer::tcp_listen(port);
+    : Vrchannel(std::move(local_uid), String()), rg_(rg) {
+    if (peer_name && peer_name["port"].is_u())
+        fd_ = tamer::tcp_listen(peer_name["port"].to_u());
+    else if (peer_name && peer_name["path"].is_s())
+        fd_ = tamer::unix_stream_listen(peer_name["path"].to_s());
 }
 
 Vrnetlistener::~Vrnetlistener() {
@@ -31,16 +33,19 @@ tamed void Vrnetlistener::connect(String peer_uid, Json peer_name,
                                   tamer::event<Vrchannel*> done) {
     tamed { struct in_addr a; tamer::fd cfd; }
 
-    if (peer_name["ip"].is_null())
-        a.s_addr = htonl(INADDR_LOOPBACK);
-    else {
-        assert(peer_name["ip"].is_s());
-        int r = inet_aton(peer_name["ip"].to_s().c_str(), &a);
-        assert(r == 0);
-    }
-    assert(peer_name["port"].is_u());
-
-    twait { tcp_connect(a, peer_name["port"].to_u(), tamer::make_event(cfd)); }
+    if ((peer_name["ip"].is_null() || peer_name["ip"].is_s())
+        && peer_name["port"].is_u()) {
+        if (peer_name["ip"].is_null())
+            a.s_addr = htonl(INADDR_LOOPBACK);
+        else {
+            int r = inet_aton(peer_name["ip"].to_s().c_str(), &a);
+            assert(r == 0);
+        }
+        twait { tamer::tcp_connect(a, peer_name["port"].to_u(),
+                                   tamer::make_event(cfd)); }
+    } else if (peer_name["path"].is_s())
+        twait { tamer::unix_stream_connect(peer_name["path"].to_s(),
+                                           tamer::make_event(cfd)); }
 
     if (cfd) {
         Vrnetchannel* c = new Vrnetchannel(local_uid(), peer_uid, std::move(cfd));

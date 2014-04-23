@@ -301,6 +301,10 @@ class String_base {
     template <typename E>
     bool decode_base64(E& e) const;
 
+    inline operator std::string() const {
+        return std::string(data(), length());
+    }
+
   protected:
     String_base() = default;
 };
