@@ -176,7 +176,8 @@ static Clp_Option options[] = {
     { "seed", 's', 0, Clp_ValUnsigned, 0 },
     { "config", 'c', 0, Clp_ValString, Clp_Negate },
     { "replica", 'r', 0, Clp_ValString, 0 },
-    { "kill", 'k', 0, Clp_ValString, 0 }
+    { "kill", 'k', 0, Clp_ValString, 0 },
+    { "master", 'm', 0, Clp_ValString, 0 }
 };
 
 int main(int argc, char** argv) {
@@ -186,6 +187,7 @@ int main(int argc, char** argv) {
     double loss_p = 0.1;
     String configfile;
     String replicaname;
+    String mastername;
     Json clientreq;
     std::vector<String> killreplicas;
 
@@ -210,6 +212,8 @@ int main(int argc, char** argv) {
             configfile = clp->negated ? String() : String(clp->vstr);
         else if (Clp_IsLong(clp, "replica"))
             replicaname = clp->vstr;
+        else if (Clp_IsLong(clp, "master"))
+            mastername = clp->vstr;
         else if (Clp_IsLong(clp, "kill"))
             killreplicas.push_back(clp->vstr);
         else if (clp->option->option_id == Clp_NotOption) {
@@ -246,9 +250,12 @@ int main(int argc, char** argv) {
         run_killreplicas(config, std::move(killreplicas));
     if (!config.empty() && replicaname)
         run_fsreplica(config, replicaname);
-    else if (!config.empty() && clientreq)
+    else if (!config.empty() && clientreq) {
+        if (mastername)
+            if (Vrview::member_type* m = config.find_pointer(mastername))
+                config.primary_index = m - config.members.data();
         run_fsclient(config, clientreq);
-    else if (config.empty())
+    } else if (config.empty())
         run_test(seed, loss_p, n ? n : 5);
 
     tamer::cleanup();
