@@ -131,9 +131,9 @@ class Vrreplica {
     tamed void send_peer(String peer_uid, Json msg);
 
     inline String view_why(const String& why) const;
-    void send_view(Vrchannel* who, const String& why);
-    tamed void send_view(String peer_uid, String why);
-    void broadcast_view(const String& why);
+    void send_view(Vrchannel* who, bool lonely, const String& why);
+    tamed void send_view(String peer_uid, bool lonely, String why);
+    void broadcast_view(const String& why, bool lonely);
 
     void initialize_next_view();
     tamed void start_view_change();
