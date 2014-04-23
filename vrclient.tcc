@@ -29,7 +29,7 @@ tamed void Vrclient::request(Json req, tamer::event<Json> done) {
         tamer::ref_monitor mon(ref_);
     }
     at_response_.push_back(std::make_pair(my_seqno, done));
-    while (done && mon) {
+    while (mon && done) {
         if (channel_) {
             channel_->send(Json::array(Vrchannel::m_request,
                                        Json::null,
@@ -52,7 +52,7 @@ tamed void Vrclient::connection_loop(Vrchannel* peer) {
         tamer::ref_monitor mon(ref_);
     }
 
-    while (peer == channel_) {
+    while (mon && peer == channel_) {
         msg.clear();
         twait { peer->receive(tamer::make_event(msg)); }
         if (!msg || !msg.is_a() || msg.size() < 2)
@@ -68,12 +68,10 @@ tamed void Vrclient::connection_loop(Vrchannel* peer) {
             process_view(msg);
     }
 
-    if (mon) {
-        log_connection(peer) << "connection closed\n";
-        delete peer;
-        if (peer == channel_)
-            channel_ = nullptr;
-    }
+    if (mon && peer == channel_)
+        channel_ = nullptr;
+    log_connection(peer) << "connection closed\n";
+    delete peer;
 }
 
 void Vrclient::process_response(Json msg) {
@@ -129,6 +127,7 @@ tamed void Vrclient::connect(tamer::event<> done) {
     while (mon) {
         peer = nullptr;
         ok = false;
+
         // every 8th try, look for someone else
         ++tries;
         if (tries % 8 == 7 && view_.size())
@@ -139,13 +138,13 @@ tamed void Vrclient::connect(tamer::event<> done) {
                          tamer::make_event(peer));
         }
 
-        if (peer) {
+        if (mon && peer) {
             peer->set_channel_uid(Vrchannel::random_uid(rg_));
             twait { peer->handshake(true, vrconstants.message_timeout,
                                     10000, tamer::make_event(ok)); }
         }
 
-        if (peer && ok) {
+        if (mon && peer && ok) {
             channel_ = peer;
             connection_loop(peer);
             done();
