@@ -9,8 +9,8 @@ class Vrnetchannel : public Vrchannel {
 
     void send(Json msg, tamer::event<> done);
     void receive(tamer::event<Json> done);
-
     void close();
+    Json status() const;
 
   private:
     msgpack_fd cfd_;
@@ -112,4 +112,8 @@ void Vrnetchannel::receive(tamer::event<Json> done) {
 
 void Vrnetchannel::close() {
     cfd_.clear();
+}
+
+Json Vrnetchannel::status() const {
+    return cfd_.status();
 }

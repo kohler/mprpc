@@ -45,7 +45,7 @@ inline void Logger::stream(std::ostream& stream) {
 }
 
 inline void Logger::flush() {
-    if (buffer_) {
+    if (buffer_.length()) {
         stream_->write(buffer_.begin(), buffer_.length());
         buffer_.clear();
     }
@@ -90,7 +90,7 @@ template <typename T>
 inline Logger& operator<<(Logger& logger, T&& x) {
     if (logger.active()) {
         logger.buffer() << std::forward<T>(x);
-        if (logger.buffer() && logger.buffer().back() == '\n')
+        if (logger.buffer().length() && logger.buffer().back() == '\n')
             logger.flush();
     }
     return logger;

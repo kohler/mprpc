@@ -112,3 +112,7 @@ void Vrchannel::receive(tamer::event<Json>) {
 
 void Vrchannel::close() {
 }
+
+Json Vrchannel::status() const {
+    return Json();
+}

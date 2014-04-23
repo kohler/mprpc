@@ -50,7 +50,7 @@ class msgpack_fd {
     inline size_t wrlowat() const;
     inline void set_wrlowat(size_t wrlowat);
 
-    inline size_t sent_bytes() const;
+    inline size_t send_bytes() const;
     inline size_t recv_bytes() const;
     inline Json status() const;
 
@@ -243,7 +243,7 @@ inline void msgpack_fd::set_wrlowat(size_t wrlowat) {
     wrlowat_ = wrlowat;
 }
 
-inline size_t msgpack_fd::sent_bytes() const {
+inline size_t msgpack_fd::send_bytes() const {
     return wrtotal_;
 }
 
@@ -253,9 +253,13 @@ inline size_t msgpack_fd::recv_bytes() const {
 
 inline Json msgpack_fd::status() const {
     //check();
-    return Json().set("buffered_write_bytes", wrsize_)
-        .set("buffered_read_bytes", rdlen_ - rdpos_)
-        .set("waiting_readers", rdreqwait_.size() + rdreplywait_.size());
+    return Json::object("rfd", rfd_.value(),
+                        "wfd", wfd_.value(),
+                        "send_total", wrtotal_,
+                        "recv_total", rdtotal_,
+                        "send_buffer", wrsize_,
+                        "recv_buffer", rdlen_ - rdpos_,
+                        "waiters", rdreqwait_.size() + rdreplywait_.size());
 }
 
 #endif
