@@ -6,6 +6,7 @@
 #include "vrstate.hh"
 #include "fsstate.hh"
 #include "clp.h"
+#include <fstream>
 
 Logger logger(std::cerr);
 
@@ -95,7 +96,7 @@ void run_test(unsigned seed, double loss_p, unsigned n) {
 namespace {
 tamed void logflusher() {
     while (1) {
-        logger.stream().flush();
+        logger.flush();
         twait { tamer::at_preblock(tamer::make_event()); }
     }
 }
@@ -181,7 +182,8 @@ static Clp_Option options[] = {
     { "config", 'c', 0, Clp_ValString, Clp_Negate },
     { "replica", 'r', 0, Clp_ValString, 0 },
     { "kill", 'k', 0, Clp_ValString, 0 },
-    { "master", 'm', 0, Clp_ValString, 0 }
+    { "master", 'm', 0, Clp_ValString, 0 },
+    { "logfile", 0, 0, Clp_ValString, 0 }
 };
 
 int main(int argc, char** argv) {
@@ -220,7 +222,15 @@ int main(int argc, char** argv) {
             mastername = clp->vstr;
         else if (Clp_IsLong(clp, "kill"))
             killreplicas.push_back(clp->vstr);
-        else if (clp->option->option_id == Clp_NotOption) {
+        else if (Clp_IsLong(clp, "logfile")) {
+            std::ofstream* s = new std::ofstream;
+            s->open(clp->vstr, std::ios_base::ate);
+            if (s->fail()) {
+                std::cerr << clp->vstr << ": " << strerror(errno) << "\n";
+                exit(1);
+            }
+            logger.stream(*s);
+        } else if (clp->option->option_id == Clp_NotOption) {
             if (!clientreq)
                 clientreq = Json::array();
             Json j = Json::parse(clp->vstr);
