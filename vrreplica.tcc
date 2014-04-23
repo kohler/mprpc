@@ -395,7 +395,9 @@ void Vrreplica::process_view_check_log(Vrchannel* who, viewnumber_t viewno,
 
 void Vrreplica::primary_adopt_view_change(Vrchannel* who) {
     // transfer next_log_ into log_
-    for (lognumber_t i = next_log_.first(); i != next_log_.last(); ++i)
+    assert(next_log_.empty() || log_.last() >= next_log_.first());
+    for (lognumber_t i = std::max(log_.first(), next_log_.first());
+         i < next_log_.last(); ++i)
         if (i == log_.last())
             log_.push_back(std::move(next_log_[i]));
         else if (log_[i].empty() || log_[i].viewno() < next_log_[i].viewno())
