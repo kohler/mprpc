@@ -91,7 +91,7 @@ void Vrclient::process_response(Json msg) {
 
 void Vrclient::process_view(Json msg) {
     Vrview view;
-    if (view.assign_parse(msg[2], true, String())) {
+    if (view.assign_parse(msg[3], true, String())) {
         std::swap(view_, view);
         merge_view_peer_names();
         if (!channel_ || view_.primary().uid != channel_->remote_uid()) {
