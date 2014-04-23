@@ -304,12 +304,13 @@ void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
         // advance view number
         next_view_.advance();
         start_view_change();
-        return;
+        want_send = !cur_view_.count(who->remote_uid())
+            && !next_view_.count(who->remote_uid());
     } else if (vdiff < 0
                || (vdiff == 0 && vcompare < 0)
                || !next_view_.shared_quorum(v))
         // respond with current view, take no other action
-        want_send = 2;
+        want_send = 1;
     else if (vdiff == 0) {
         cur_view_.prepare(who->remote_uid(), payload, false);
         next_view_.prepare(who->remote_uid(), payload, true);
@@ -325,27 +326,30 @@ void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
         // start new view
         next_view_ = v;
         initialize_next_view();
+        broadcast_view(view_why("new"), false);
         cur_view_.prepare(who->remote_uid(), payload, false);
         next_view_.prepare(who->remote_uid(), payload, true);
-        broadcast_view(view_why("new"), false);
         want_send = 0;
     }
 
-    if (next_view_.me_primary()
-        && next_view_.nconfirmed > next_view_.f()
-        && want_send != 2) {
-        if (cur_view_.viewno != next_view_.viewno)
-            primary_adopt_view_change(who);
-        else
-            send_commit_log(cur_view_.find_pointer(who->remote_uid()),
-                            commitno(), last_logno());
-    } else if (want_send)
+    if (want_send)
         send_view(who, false, view_why("send"));
+
     if (between_views()
         && !next_view_.me_primary()
         && next_view_.primary().prepared()
         && !view_confirm_sent_)
         send_view(next_view_.primary().uid, false, view_why("confirm"));
+
+    if (next_view_.me_primary()
+        && next_view_.nconfirmed > next_view_.f()
+        && next_view_.count(who->remote_uid())) {
+        if (cur_view_.viewno != next_view_.viewno)
+            primary_adopt_view_change(who);
+        else
+            send_commit_log(cur_view_.find_pointer(who->remote_uid()),
+                            commitno(), last_logno());
+    }
 }
 
 void Vrreplica::process_view_transfer_log(Vrchannel* who, viewnumber_t viewno,
