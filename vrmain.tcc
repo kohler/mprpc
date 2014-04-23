@@ -241,7 +241,7 @@ int main(int argc, char** argv) {
             killreplicas.push_back(clp->vstr);
         else if (Clp_IsLong(clp, "logfile")) {
             std::ofstream* s = new std::ofstream;
-            s->open(clp->vstr, std::ios_base::ate);
+            s->open(clp->vstr, std::ios_base::app);
             if (s->fail()) {
                 std::cerr << clp->vstr << ": " << strerror(errno) << "\n";
                 exit(1);
