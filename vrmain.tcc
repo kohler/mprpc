@@ -93,6 +93,13 @@ void run_test(unsigned seed, double loss_p, unsigned n) {
 
 
 namespace {
+tamed void logflusher() {
+    while (1) {
+        logger.stream().flush();
+        twait { tamer::at_preblock(tamer::make_event()); }
+    }
+}
+
 void run_fsreplica(const Vrview& config, String replicaname) {
     std::mt19937 rg(replicaname.hashcode() + time(0));
     vrconstants.trim_log = false;
@@ -104,6 +111,7 @@ void run_fsreplica(const Vrview& config, String replicaname) {
     Vrreplica* me = new Vrreplica(new Fsstate, config, my_conn, rg);
     me->join(config, event<>());
 
+    logflusher();
     tamer::loop();
 }
 
