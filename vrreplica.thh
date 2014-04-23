@@ -78,17 +78,25 @@ class Vrreplica {
     view_type next_view_;
 
     struct channel_type {
-        Vrchannel* c;
+        enum { nc = 2 };
+        Vrchannel* cs[nc];
         Json name;
         tamer::event<> wait;
         double backoff;
         bool connecting;
         channel_type()
-            : c(0), backoff(0.001), connecting(false) {
+            : backoff(0.001), connecting(false) {
+            for (int i = 0; i != nc; ++i)
+                cs[i] = nullptr;
         }
         channel_type(Vrchannel* channel)
-            : c(channel), backoff(0.001), connecting(false) {
+            : backoff(0.001), connecting(false) {
+            for (int i = 0; i != nc; ++i)
+                cs[i] = nullptr;
+            add(channel);
         }
+        bool add(Vrchannel* channel);
+        bool remove(Vrchannel* channel);
     };
 
     Vrchannel* me_;

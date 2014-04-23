@@ -83,8 +83,10 @@ tamed void Vrnetlistener::receive_connection(tamer::event<Vrchannel*> done) {
     if (cfd) {
         Vrnetchannel* c = new Vrnetchannel(local_uid(), String(), std::move(cfd));
         done(c);
-    } else
+    } else {
+        std::cerr << strerror(-cfd.error()) << "\n";
         done(nullptr);
+    }
 }
 
 void Vrnetlistener::close() {

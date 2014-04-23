@@ -17,7 +17,7 @@ Vrreplica::Vrreplica(Vrstate* state, const Vrview& config,
     for (auto it = config.members.begin(); it != config.members.end(); ++it)
         if (it->peer_name)
             channels_[it->uid].name = it->peer_name;
-    channels_[uid()].c = me;
+    channels_[uid()].add(me);
 
     // current view == just me
     cur_view_ = Vrview::make_singular(config.group_name(), uid());
@@ -62,6 +62,31 @@ String Vrreplica::unparse_view_state() const {
     return sa.take_string();
 }
 
+bool Vrreplica::channel_type::add(Vrchannel* channel) {
+    int i = 0;
+    while (i != nc && cs[i] && cs[i]->channel_uid() < channel->channel_uid())
+        ++i;
+    if (i != nc && cs[nc - 1] == nullptr
+        && (!cs[i] || cs[i]->channel_uid() > channel->channel_uid())) {
+        memmove(&cs[i + 1], &cs[i], sizeof(cs[i]) * (nc - i - 1));
+        cs[i] = channel;
+        return true;
+    } else
+        return false;
+}
+
+bool Vrreplica::channel_type::remove(Vrchannel* channel) {
+    int i = 0;
+    while (i != nc && cs[i] && cs[i]->channel_uid() != channel->channel_uid())
+        ++i;
+    if (i != nc && cs[i]) {
+        memmove(&cs[i], &cs[i + 1], sizeof(cs[i]) * (nc - i - 1));
+        cs[nc - 1] = nullptr;
+        return true;
+    } else
+        return false;
+}
+
 void Vrreplica::verify_state() const {
     if (decideno_ > commitno_
         || decideno_ > ackno_
@@ -96,7 +121,7 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
     }
 
     // does peer already exist?
-    if (ch->c) {
+    if (ch->cs[0]) {
         done();
         return;
     }
@@ -118,12 +143,12 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
     // connected during delay?
     if (!mon)
         return;
-    if (ch->c) {
+    if (ch->cs[0]) {
         assert(!ch->connecting);
         return;
     }
 
-    while (!ch->c && ch->wait) {
+    while (!ch->cs[0] && ch->wait) {
         log_connection(uid(), peer_uid) << "connecting\n";
         twait { me_->connect(peer_uid, ch->name, make_event(peer)); }
         if (peer) {
@@ -144,7 +169,7 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
 tamed void Vrreplica::join(String peer_uid, event<> done) {
     tamed { Vrchannel* ep; tamer::ref_monitor mon(ref_); }
     while (mon && next_view_.size() == 1) {
-        if ((ep = channels_[peer_uid].c)) {
+        if ((ep = channels_[peer_uid].cs[0])) {
             ep->send(Json::array(Vrchannel::m_join, Json::null));
             twait {
                 at_view(next_view_.viewno + 1,
@@ -183,17 +208,15 @@ tamed void Vrreplica::connection_handshake(Vrchannel* peer, bool active_end,
         String peer_uid = peer->remote_uid();
         channel_type& ch = channels_[peer_uid];
 
-        if (ch.c) {
-            String old_cuid = ch.c->channel_uid();
-            if (old_cuid < peer->channel_uid())
-                log_connection(peer) << "preferring old connection (" << old_cuid << ")\n";
-            else {
-                log_connection(peer) << "dropping old connection (" << old_cuid << ")\n";
-                ch.c->close();
-                ch.c = peer;
-            }
-        } else
-            ch.c = peer;
+        ch.add(peer);
+        if (ch.cs[0] == peer && ch.cs[1]) {
+            log_connection(peer) << "dropping old connection (" << ch.cs[1]->channel_uid() << ")\n";
+            ch.cs[1]->close();
+            ch.remove(ch.cs[1]);
+        } else if (ch.cs[0] != peer) {
+            log_connection(peer) << "preferring old connection (" << ch.cs[0]->channel_uid() << ")\n";
+            ch.cs[0]->send_handshake(true);
+        }
 
         ch.wait();
         ch.connecting = false;
@@ -231,8 +254,7 @@ tamed void Vrreplica::connection_loop(Vrchannel* peer) {
     }
 
     log_connection(peer) << "connection closed\n";
-    if (channels_[peer->remote_uid()].c == peer)
-        channels_[peer->remote_uid()].c = nullptr;
+    channels_[peer->remote_uid()].remove(peer);
     delete peer;
 }
 
@@ -474,7 +496,7 @@ tamed void Vrreplica::send_view(String peer_uid, bool lonely, String why) {
         viewnumber_t next_viewno = next_view_.viewno;
         Vrchannel* ep;
     }
-    while (!(ep = channels_[peer_uid].c))
+    while (!(ep = channels_[peer_uid].cs[0]))
         twait { connect(peer_uid, make_event()); }
     if (ep != me_
         && cur_viewno == cur_view_.viewno
@@ -525,7 +547,7 @@ tamed void Vrreplica::start_view_change() {
 
 tamed void Vrreplica::send_peer(String peer_uid, Json msg) {
     tamed { Vrchannel* ep = nullptr; }
-    while (!(ep = channels_[peer_uid].c))
+    while (!(ep = channels_[peer_uid].cs[0]))
         twait { connect(peer_uid, make_event()); }
     if (ep != me_)
         ep->send(msg);
@@ -784,7 +806,7 @@ void Vrreplica::process_ack_update_commitno(lognumber_t new_commitno) {
     }
 
     for (auto it = messages.begin(); it != messages.end(); ++it) {
-        if (Vrchannel* ep = channels_[it->first].c) {
+        if (Vrchannel* ep = channels_[it->first].cs[0]) {
             log_send(ep) << it->second << "\n";
             ep->send(std::move(it->second));
         }

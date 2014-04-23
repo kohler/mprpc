@@ -88,6 +88,18 @@ struct Vrview {
     inline const String& group_name() const {
         return group_name_;
     }
+    inline std::vector<member_type>::const_iterator begin() const {
+        return members.begin();
+    }
+    inline std::vector<member_type>::const_iterator end() const {
+        return members.end();
+    }
+    inline std::vector<member_type>::iterator begin() {
+        return members.begin();
+    }
+    inline std::vector<member_type>::iterator end() {
+        return members.end();
+    }
 
     inline int count(const String& uid) const;
     inline member_type* find_pointer(const String& uid);
