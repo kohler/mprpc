@@ -1,0 +1,33 @@
+#! /usr/bin/perl
+
+mkdir("phtest") if !-d "phtest";
+
+if ($ARGV[0] eq "start") {
+    system("./mpvr -cphtest/c.js -kall") if -r "phtest/c.js";
+    truncate("phtest/log", 0);
+    unlink("phtest/c.js");
+
+    open(CONFIG, ">phtest/c.js") || die;
+    print CONFIG "{\"members\":{";
+    for ($i = 0; $i < $ARGV[1]; ++$i) {
+        print CONFIG ($i ? ",\n" : ""), "\"n$i\":{\"path\":\"phtest/n$i\"}";
+    }
+    print CONFIG "}}\n";
+    close CONFIG;
+
+    for ($i = 0; $i < $ARGV[1]; ++$i) {
+        system("./mpvr -cphtest/c.js -rn$i >>phtest/log 2>&1 &");
+    }
+} elsif ($ARGV[0] eq "kill" && (@ARGV == 1 || $ARGV[1] eq "all")) {
+    if (-r "phtest/c.js") {
+        system("./mpvr -cphtest/c.js -kall");
+    }
+} elsif ($ARGV[0] eq "kill") {
+    system("./mpvr -cphtest/c.js -kn$ARGV[1]");
+} elsif ($ARGV[0] eq "revive") {
+    system("./mpvr -cphtest/c.js -rn$ARGV[1] >>phtest/log 2>&1 &");
+} elsif ($ARGV[0] eq "do") {
+    system("./mpvr", "-cphtest/c.js", "write", $ARGV[2], $ARGV[3]);
+} elsif ($ARGV[0] eq "verify") {
+    system("./mpvr", "-cphtest/c.js", "read", $ARGV[2]);
+}
