@@ -35,7 +35,7 @@ class Vrtestlistener : public Vrchannel {
   public:
     inline Vrtestlistener(String my_uid, Vrtestcollection* collection)
         : Vrchannel(my_uid, String()), collection_(collection) {
-        set_connection_uid(my_uid);
+        set_channel_uid(my_uid);
     }
     void connect(String peer_uid, Json peer_name,
                  tamer::event<Vrchannel*> done);

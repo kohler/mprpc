@@ -128,7 +128,7 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
         twait { me_->connect(peer_uid, ch->name, make_event(peer)); }
         if (peer) {
             assert(peer->remote_uid() == peer_uid);
-            peer->set_connection_uid(Vrchannel::random_uid(rg_));
+            peer->set_channel_uid(Vrchannel::random_uid(rg_));
             twait { connection_handshake(peer, true, make_event()); }
         } else if (mon) {
             twait { tamer::at_delay(ch->backoff, make_event()); }
@@ -184,8 +184,8 @@ tamed void Vrreplica::connection_handshake(Vrchannel* peer, bool active_end,
         channel_type& ch = channels_[peer_uid];
 
         if (ch.c) {
-            String old_cuid = ch.c->connection_uid();
-            if (old_cuid < peer->connection_uid())
+            String old_cuid = ch.c->channel_uid();
+            if (old_cuid < peer->channel_uid())
                 log_connection(peer) << "preferring old connection (" << old_cuid << ")\n";
             else {
                 log_connection(peer) << "dropping old connection (" << old_cuid << ")\n";

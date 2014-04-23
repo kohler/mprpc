@@ -140,7 +140,7 @@ tamed void Vrclient::connect(tamer::event<> done) {
         }
 
         if (peer) {
-            peer->set_connection_uid(Vrchannel::random_uid(rg_));
+            peer->set_channel_uid(Vrchannel::random_uid(rg_));
             twait { peer->handshake(true, vrconstants.message_timeout,
                                     10000, tamer::make_event(ok)); }
         }

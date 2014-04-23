@@ -80,13 +80,13 @@ bool Vrchannel::check_handshake(const Json& msg) const {
             || (msg[3].is_s() && msg[3].to_s() == local_uid()))
         && msg[4].is_s()
         && !msg[4].to_s().empty()
-        && (connection_uid().empty()
-            || msg[4].to_s() == connection_uid());
+        && (channel_uid().empty()
+            || msg[4].to_s() == channel_uid());
 }
 
 void Vrchannel::send_handshake(bool want_reply) {
     Json msg = Json::array(m_handshake, Json::null,
-                           local_uid(), remote_uid(), connection_uid(),
+                           local_uid(), remote_uid(), channel_uid(),
                            want_reply);
     log_send(this) << msg << "\n";
     send(std::move(msg));
@@ -96,8 +96,8 @@ void Vrchannel::process_handshake(const Json& msg) {
     assert(check_handshake(msg));
     if (remote_uid_.empty())
         remote_uid_ = msg[2].to_s();
-    if (connection_uid_.empty())
-        connection_uid_ = msg[4].to_s();
+    if (channel_uid_.empty())
+        channel_uid_ = msg[4].to_s();
     if (msg[5])
         send_handshake(false);
 }

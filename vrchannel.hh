@@ -20,12 +20,12 @@ class Vrchannel {
     inline const String& remote_uid() const {
         return remote_uid_;
     }
-    inline const String& connection_uid() const {
-        return connection_uid_;
+    inline const String& channel_uid() const {
+        return channel_uid_;
     }
-    inline void set_connection_uid(String x) {
-        assert(connection_uid_.empty() || connection_uid_ == x);
-        connection_uid_ = std::move(x);
+    inline void set_channel_uid(String x) {
+        assert(channel_uid_.empty() || channel_uid_ == x);
+        channel_uid_ = std::move(x);
     }
     inline unsigned connection_version() const {
         return connection_version_;
@@ -63,7 +63,7 @@ class Vrchannel {
   protected:
     String local_uid_;
     String remote_uid_;
-    String connection_uid_;
+    String channel_uid_;
     unsigned connection_version_;
 
     class closure__handshake__bddQb_;
@@ -95,7 +95,7 @@ inline Logger& log_connection(const Vrchannel* ep,
         logger << x;
     else
         logger << "[]";
-    if (const String& x = ep->connection_uid())
+    if (const String& x = ep->channel_uid())
         logger << " (" << x << ")";
     return logger << ": ";
 }
