@@ -129,9 +129,9 @@ tamed void Vrclient::connect(tamer::event<> done) {
         ok = false;
 
         // every 8th try, look for someone else
-        ++tries;
         if (tries % 8 == 7 && view_.size())
             peer_uid = random_replica_uid();
+        ++tries;
 
         twait {
             me_->connect(peer_uid, peer_names_[peer_uid],
@@ -142,7 +142,8 @@ tamed void Vrclient::connect(tamer::event<> done) {
             peer->set_channel_uid(Vrchannel::random_uid(rg_));
             twait { peer->handshake(true, vrconstants.message_timeout,
                                     2, tamer::make_event(ok)); }
-        }
+        } else
+            tries = 7;          // try a new node next time
 
         if (mon && peer && ok) {
             channel_ = peer;
