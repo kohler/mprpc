@@ -11,7 +11,8 @@ Vrclient::Vrclient(Vrchannel* me, const Vrview& config, std::mt19937& rg)
 Vrclient::~Vrclient() {
     for (auto it = at_response_.begin(); it != at_response_.end(); ++it)
         it->second.unblock();
-    delete channel_;
+    if (channel_)
+        channel_->close();      // the coroutine will delete it
     delete me_;
     at_view_change_();
 }
@@ -70,7 +71,8 @@ tamed void Vrclient::connection_loop(Vrchannel* peer) {
 
     if (mon && peer == channel_)
         channel_ = nullptr;
-    log_connection(peer) << "connection closed\n";
+    if (mon)
+        log_connection(peer) << "connection closed\n";
     delete peer;
 }
 

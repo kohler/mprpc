@@ -290,4 +290,5 @@ int main(int argc, char** argv) {
         run_test(seed, loss_p, n ? n : 5);
 
     tamer::cleanup();
+    Clp_DeleteParser(clp);
 }
