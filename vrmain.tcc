@@ -7,17 +7,34 @@
 #include "fsstate.hh"
 #include "clp.h"
 #include <fstream>
+#include <fcntl.h>
 
 Logger logger(std::cerr);
 
-static String make_replica_uid() {
+namespace {
+String make_replica_uid() {
     static int counter;
     return String("n") + String(counter++);
 }
 
-static String make_client_uid() {
+String make_client_uid() {
     static int counter;
     return String("c") + String(counter++);
+}
+
+uint64_t truly_random_u64() {
+    std::mt19937 rg(time(0) + getpid());
+    uint64_t x = std::uniform_int_distribution<uint64_t>()(rg);
+
+    int f = open("/dev/urandom", O_RDONLY);
+    if (f >= 0) {
+        ssize_t r = read(f, &x, sizeof(x));
+        (void) r;
+        close(f);
+    }
+
+    return x;
+}
 }
 
 tamed void many_requests(Vrclient* client) {
@@ -102,7 +119,7 @@ tamed void logflusher() {
 }
 
 void run_fsreplica(const Vrview& config, String replicaname) {
-    std::mt19937 rg(replicaname.hashcode() + time(0));
+    std::mt19937 rg(truly_random_u64());
     vrconstants.trim_log = false;
 
     auto my_mem = config.find_pointer(replicaname);
@@ -129,7 +146,7 @@ tamed void run_fsclientreq(Vrclient* client, Json clientreq) {
 }
 
 void run_fsclient(const Vrview& config, Json clientreq) {
-    std::mt19937 rg(time(0));
+    std::mt19937 rg(truly_random_u64());
     Vrnetlistener* conn = new Vrnetlistener("c." + Vrchannel::random_uid(rg),
                                             0, rg);
     Vrclient* client = new Vrclient(conn, config, rg);
