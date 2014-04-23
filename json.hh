@@ -1600,6 +1600,7 @@ template <typename... Args>
 inline Json Json::array(Args&&... args) {
     Json j;
     j.u_.x.type = j_array;
+    j.reserve(sizeof...(args));
     j.push_back_list(std::forward<Args>(args)...);
     return j;
 }
