@@ -180,7 +180,7 @@ class Vrconstants {
     bool trim_log;
 
     Vrconstants()
-        : message_timeout(1),
+        : message_timeout(0.5),
           client_message_timeout(1.5),
           request_timeout(10),
           handshake_timeout(5),
