@@ -155,20 +155,6 @@ inline size_t msgpack_fd::call_seq() const {
     return rdreply_seq_ + rdreplywait_.size();
 }
 
-inline void msgpack_fd::read(tamer::event<Json> receiver) {
-    if (!rdreqq_.empty()) {
-        if (receiver)
-            swap(*receiver.result_pointer(), rdreqq_.front());
-        rdreqq_.pop_front();
-        receiver.unblock();
-    } else if (read_until_request(true)) {
-        if (receiver)
-            swap(*receiver.result_pointer(), rdparser_.result());
-        receiver.unblock();
-    } else
-        rdreqwait_.push_back(receiver);
-}
-
 template <typename R>
 void msgpack_fd::read(tamer::preevent<R, Json> receiver) {
     if (!rdreqq_.empty()) {
@@ -178,8 +164,10 @@ void msgpack_fd::read(tamer::preevent<R, Json> receiver) {
     } else if (read_until_request(true)) {
         swap(*receiver.result_pointer(), rdparser_.result());
         receiver.unblock();
-    } else
+    } else if (rfd_)
         rdreqwait_.push_back(receiver);
+    else
+        receiver(Json());
 }
 
 inline void msgpack_fd::read_request(tamer::event<Json> receiver) {
@@ -208,6 +196,8 @@ inline void msgpack_fd::write(const Json& j, tamer::event<bool> done) {
 inline void msgpack_fd::call(const Json& j, tamer::event<Json> done) {
     assert(j.is_a() && (j[1].is_null() || j[1].is_i()));
     write(j, true);
+    if (!wfd_ || !rfd_)
+        done(Json());
     if (done || !rdreplywait_.empty())
         rdreplywait_.push_back(replyelem{std::move(done), wrpos_ + wrsize_});
     else

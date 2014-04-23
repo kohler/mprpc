@@ -80,6 +80,8 @@ msgpack_fd::~msgpack_fd() {
 
 void msgpack_fd::write(const Json& j, bool iscall) {
     assert(!iscall || j.is_a());
+    if (!wfd_)
+        return;
 
     // find StringAccum to write into
     wrelem* w = &wrelem_.back();
@@ -113,6 +115,22 @@ void msgpack_fd::write(const Json& j, bool iscall) {
         tamer::at_asap(std::move(wrwake_));
         assert(!wrwake_);
     }
+}
+
+void msgpack_fd::read(tamer::event<Json> receiver) {
+    if (!rdreqq_.empty()) {
+        if (receiver)
+            swap(*receiver.result_pointer(), rdreqq_.front());
+        rdreqq_.pop_front();
+        receiver.unblock();
+    } else if (read_until_request(true)) {
+        if (receiver)
+            swap(*receiver.result_pointer(), rdparser_.result());
+        receiver.unblock();
+    } else if (rfd_)
+        rdreqwait_.push_back(receiver);
+    else
+        receiver(Json());
 }
 
 void msgpack_fd::flush(tamer::event<bool> done) {
