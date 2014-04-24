@@ -56,10 +56,9 @@ tamed void Vrchannel::handshake(bool active_end, double message_timeout,
         log_receive(this) << msg << "\n";
         process_handshake(msg);
         done(true);
-    } else if (!msg) { // null or false
-        log_receive(this) << "handshake timeout (" << msg << ")\n";
+    } else if (!msg) // null or false
         done(false);
-    } else if (msg.is_a() && msg[0] == m_kill) {
+    else if (msg.is_a() && msg[0] == m_kill) {
         log_receive(this) << msg << "\n";
         exit(0);
     } else {
