@@ -74,7 +74,7 @@ typedef union {
 tamed void Vrnetlistener::receive_connection(tamer::event<Vrchannel*> done) {
     tamed {
         my_sockaddr_union sa;
-        socklen_t salen;
+        socklen_t salen = sizeof(sa);
         tamer::fd cfd;
     }
 
