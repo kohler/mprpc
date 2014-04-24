@@ -4,12 +4,13 @@
 #include <random>
 #include "json.hh"
 #include "logger.hh"
+#include "vrlog.hh"
 
 class Vrchannel {
   public:
     inline Vrchannel(String local_uid, String remote_uid)
         : local_uid_(std::move(local_uid)), remote_uid_(std::move(remote_uid)),
-          connection_version_(0) {
+          connection_version_(0), error_viewno_(0), error_viewno_at_(0) {
     }
     virtual ~Vrchannel() {
     }
@@ -35,6 +36,8 @@ class Vrchannel {
     virtual void connect(String peer_uid, Json peer_name,
                          tamer::event<Vrchannel*> done);
     virtual void receive_connection(tamer::event<Vrchannel*> done);
+
+    bool check_view_response(viewnumber_t viewno);
 
     void send_handshake(bool want_reply);
     bool check_handshake(const Json& msg) const;
@@ -66,6 +69,8 @@ class Vrchannel {
     String remote_uid_;
     String channel_uid_;
     unsigned connection_version_;
+    viewnumber_t error_viewno_;
+    double error_viewno_at_;
 
     class closure__handshake__bddQb_;
     void handshake(closure__handshake__bddQb_&);
@@ -81,6 +86,15 @@ inline void Vrchannel::send(Json msg) {
     send(std::move(msg), tamer::event<>());
 }
 
+inline bool Vrchannel::check_view_response(viewnumber_t viewno) {
+    if (viewno != error_viewno_
+        || error_viewno_at_ + 5 < tamer::drecent()) {
+        error_viewno_ = viewno;
+        error_viewno_at_ = tamer::drecent();
+        return true;
+    } else
+        return false;
+}
 
 inline Logger& log_connection(const String& local_uid,
                               const String& remote_uid,

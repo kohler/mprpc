@@ -18,7 +18,7 @@ Vrclient::~Vrclient() {
 }
 
 void Vrclient::merge_view_peer_names() {
-    for (auto it = view_.members.begin(); it != view_.members.end(); ++it)
+    for (auto it = view_.begin(); it != view_.end(); ++it)
         if (it->peer_name)
             peer_names_[it->uid] = it->peer_name;
 }

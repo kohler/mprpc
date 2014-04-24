@@ -567,7 +567,8 @@ void Vrreplica::process_request(Vrchannel* who, Json& msg) {
         who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
     } else if (!is_primary() || between_views()) {
-        send_view(who, false, view_why("old request"));
+        if (who->check_view_response(0))
+            send_view(who, false, view_why("old request"));
         return;
     }
 
@@ -678,7 +679,8 @@ void Vrreplica::process_commit(Vrchannel* who, Json& msg) {
             return;
         } else {
             // odd view
-            send_view(who, false, view_why("old commit"));
+            if (who->check_view_response(view))
+                send_view(who, false, view_why("old commit"));
             return;
         }
     }
@@ -765,7 +767,8 @@ void Vrreplica::process_ack(Vrchannel* who, const Json& msg) {
     } else if (msg[2].to_u() != cur_view_.viewno
                || between_views()
                || !(peer = cur_view_.find_pointer(who->remote_uid()))) {
-        send_view(who, false, view_why("old ack"));
+        if (who->check_view_response(msg[2].to_u()))
+            send_view(who, false, view_why("old ack"));
         return;
     }
 
