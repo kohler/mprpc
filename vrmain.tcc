@@ -127,10 +127,10 @@ void run_fsreplica(const Vrview& config, String replicaname) {
     Vrnetlistener* my_conn = new Vrnetlistener(replicaname, my_mem->peer_name, rg);
     assert(my_conn->ok());
     Vrreplica* me = new Vrreplica(new Fsstate, config, my_conn, rg);
-    me->join(config, event<>());
 
     logflusher();
     tamer::loop();
+    (void) me;
 }
 
 tamed void run_fsclientreq(Vrclient* client, Json clientreq) {

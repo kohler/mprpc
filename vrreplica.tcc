@@ -19,10 +19,25 @@ Vrreplica::Vrreplica(Vrstate* state, const Vrview& config,
             channels_[it->uid].name = it->peer_name;
     channels_[uid()].add(me);
 
-    // current view == just me
-    cur_view_ = Vrview::make_singular(config.group_name(), uid());
+    if (!config.empty()) {
+        cur_view_ = config;
+        cur_view_.clear_preparation(false);
+    } else
+        // current view == just me
+        cur_view_ = Vrview::make_singular(config.group_name(), uid());
+    cur_view_.primary_index = 0;
+    cur_view_.my_index = cur_view_.find_index(uid());
     next_view_ = cur_view_;
+
     listen_loop();
+
+    if (cur_view_.me_primary())
+        primary_keepalive_loop();
+    else
+        backup_keepalive_loop();
+
+    for (auto it = cur_view_.begin(); it != cur_view_.end(); ++it)
+        connect(it->uid, tamer::event<>());
 }
 
 void Vrreplica::dump(std::ostream& out) const {
@@ -148,7 +163,7 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
         return;
     }
 
-    while (!ch->cs[0] && ch->wait) {
+    while (!ch->cs[0]) {
         log_connection(uid(), peer_uid) << "connecting\n";
         twait { me_->connect(peer_uid, ch->name, make_event(peer)); }
         if (peer) {

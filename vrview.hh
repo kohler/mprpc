@@ -104,6 +104,7 @@ struct Vrview {
     inline int count(const String& uid) const;
     inline member_type* find_pointer(const String& uid);
     inline const member_type* find_pointer(const String& uid) const;
+    inline int find_index(const String& uid) const;
 
     Json members_json() const;
     Json acks_json() const;
@@ -146,6 +147,13 @@ inline const Vrview::member_type* Vrview::find_pointer(const String& uid) const 
         if (it->uid == uid)
             return &*it;
     return nullptr;
+}
+
+inline int Vrview::find_index(const String& uid) const {
+    for (auto it = members.begin(); it != members.end(); ++it)
+        if (it->uid == uid)
+            return it - members.begin();
+    return -1;
 }
 
 inline Json Vrview::members_json() const {
