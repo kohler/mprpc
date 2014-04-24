@@ -120,14 +120,14 @@ tamed void Vrclient::connect(tamer::event<> done) {
         tamer::ref_monitor mon(ref_);
     }
 
-    if (view_.primary_index >= 0)
-        peer_uid = view_.primary().uid;
-    else
-        peer_uid = random_replica_uid();
-
     while (mon) {
         peer = nullptr;
         ok = false;
+
+        if (view_.primary_index >= 0)
+            peer_uid = view_.primary().uid;
+        else
+            peer_uid = random_replica_uid();
 
         twait {
             me_->connect(peer_uid, peer_names_[peer_uid],
@@ -149,7 +149,6 @@ tamed void Vrclient::connect(tamer::event<> done) {
 
         delete peer;
         // look for someone else
-        if (view_.size())
-            peer_uid = random_replica_uid();
+        view_.primary_index = -1;
     }
 }
