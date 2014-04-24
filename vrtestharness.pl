@@ -32,7 +32,7 @@ if ($ARGV[0] eq "start" || $ARGV[0] eq "startnodes") {
     system("./mpvr", "-cphtest/c.js", "-mn$ARGV[2]", "write", $ARGV[3], $ARGV[4]);
 } elsif ($ARGV[0] eq "verify") {
     $pid = open3(\*CIN, \*COUT, \*CERR,
-                 "./mpvr", "-cphtest/c.js", "-mn$ARGV[1]", "read", $ARGV[2]);
+                 "./mpvr", "-cphtest/c.js", "-mn$ARGV[1]", "--log=/dev/stderr", "read", $ARGV[2]);
     waitpid($pid, 0);
     undef $/;
     $outbuf = <COUT>;
@@ -42,7 +42,12 @@ if ($ARGV[0] eq "start" || $ARGV[0] eq "startnodes") {
     $/ = "\n";
     chomp($outbuf);
     chomp($ARGV[3]);
-    exit($ARGV[3] eq $outbuf ? 0 : 1);
+    if ($ARGV[3] eq $outbuf) {
+        exit(0);
+    } else {
+        print STDERR "./mpvr read $ARGV[2]: expected $ARGV[3], got $outbuf\n";
+        exit(1);
+    }
 } else {
     print STDERR "./vrtestharness.pl: Bad command \"", join(" ", @ARGV), "\"\n";
     exit 1;

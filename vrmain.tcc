@@ -9,7 +9,7 @@
 #include <fstream>
 #include <fcntl.h>
 
-Logger logger(std::cerr);
+Logger logger(std::cout);
 
 namespace {
 String make_replica_uid() {
