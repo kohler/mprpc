@@ -27,10 +27,9 @@ tamed void Vrclient::request(Json req, tamer::event<Json> done) {
     tamed {
         unsigned my_seqno = ++client_seqno_;
         bool retransmit = false;
-        tamer::ref_monitor mon(ref_);
     }
     at_response_.push_back(std::make_pair(my_seqno, done));
-    while (mon && done) {
+    while (done) {
         if (channel_) {
             channel_->send(Json::array(Vrchannel::m_request,
                                        Json::null,
@@ -47,13 +46,10 @@ tamed void Vrclient::request(Json req, tamer::event<Json> done) {
     }
 }
 
-tamed void Vrclient::connection_loop(Vrchannel* peer) {
-    tamed {
-        Json msg;
-        tamer::ref_monitor mon(ref_);
-    }
+tamed void Vrclient::connection_loop(std::shared_ptr<Vrchannel> peer) {
+    tamed { Json msg; }
 
-    while (mon && peer == channel_) {
+    while (peer.get() == channel_) {
         msg.clear();
         twait { peer->receive(tamer::make_event(msg)); }
         if (!msg || !msg.is_a() || msg.size() < 2)
@@ -69,11 +65,9 @@ tamed void Vrclient::connection_loop(Vrchannel* peer) {
             process_view(msg);
     }
 
-    if (mon && peer == channel_)
+    if (peer.get() == channel_)
         channel_ = nullptr;
-    if (mon)
-        log_connection(peer) << "connection closed\n";
-    delete peer;
+    log_connection(peer) << "connection closed\n";
 }
 
 void Vrclient::process_response(Json msg) {
@@ -114,13 +108,12 @@ inline String Vrclient::random_replica_uid() const {
 tamed void Vrclient::connect(tamer::event<> done) {
     tamed {
         String peer_uid;
-        Vrchannel* peer;
+        std::shared_ptr<Vrchannel> peer;
         bool ok;
         tamer::rendezvous<> r;
-        tamer::ref_monitor mon(ref_);
     }
 
-    while (mon) {
+    while (1) {
         peer = nullptr;
         ok = false;
 
@@ -134,20 +127,19 @@ tamed void Vrclient::connect(tamer::event<> done) {
                          tamer::make_event(peer));
         }
 
-        if (mon && peer) {
+        if (peer) {
             peer->set_channel_uid(Vrchannel::random_uid(rg_));
             twait { peer->handshake(true, vrconstants.message_timeout,
                                     2, tamer::make_event(ok)); }
         }
 
-        if (mon && peer && ok) {
-            channel_ = peer;
+        if (peer && ok) {
+            channel_ = peer.get();
             connection_loop(peer);
             done();
             return;
         }
 
-        delete peer;
         // look for someone else
         view_.primary_index = -1;
     }

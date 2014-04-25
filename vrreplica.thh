@@ -171,9 +171,9 @@ class Vrreplica {
     template <typename T> void process_at_number(T number, std::deque<std::pair<T, tamer::event<> > >& list);
 
     tamed void listen_loop();
-    tamed void connection_handshake(Vrchannel* peer, bool active_end,
-                                    tamer::event<> done);
-    tamed void connection_loop(Vrchannel* peer);
+    tamed void connection_handshake(std::shared_ptr<Vrchannel> peer,
+                                    bool active_end, tamer::event<> done);
+    tamed void connection_loop(std::shared_ptr<Vrchannel> peer);
     tamed void primary_keepalive_loop();
     tamed void backup_keepalive_loop();
 };

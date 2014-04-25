@@ -2,6 +2,7 @@
 #define VRCHANNEL_HH 1
 #include <tamer/tamer.hh>
 #include <random>
+#include <memory>
 #include "json.hh"
 #include "logger.hh"
 #include "vrlog.hh"
@@ -34,8 +35,8 @@ class Vrchannel {
     virtual Json status() const;
 
     virtual void connect(String peer_uid, Json peer_name,
-                         tamer::event<Vrchannel*> done);
-    virtual void receive_connection(tamer::event<Vrchannel*> done);
+                         tamer::event<std::shared_ptr<Vrchannel> > done);
+    virtual void receive_connection(tamer::event<std::shared_ptr<Vrchannel> > done);
 
     bool check_view_response(viewnumber_t viewno);
 
@@ -121,6 +122,19 @@ inline Logger& log_send(const Vrchannel* ep) {
 
 inline Logger& log_receive(const Vrchannel* ep) {
     return log_connection(ep, " <- ");
+}
+
+inline Logger& log_connection(std::shared_ptr<const Vrchannel> ep,
+                              const char* ctype = " -- ") {
+    return log_connection(ep.get(), ctype);
+}
+
+inline Logger& log_send(std::shared_ptr<const Vrchannel> ep) {
+    return log_send(ep.get());
+}
+
+inline Logger& log_receive(std::shared_ptr<const Vrchannel> ep) {
+    return log_receive(ep.get());
 }
 
 #endif

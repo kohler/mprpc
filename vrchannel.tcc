@@ -21,11 +21,11 @@ const String Vrchannel::m_kill("kill");
 const String Vrchannel::m_error("error");
 
 
-void Vrchannel::connect(String, Json, tamer::event<Vrchannel*>) {
+void Vrchannel::connect(String, Json, tamer::event<std::shared_ptr<Vrchannel> >) {
     assert(0);
 }
 
-void Vrchannel::receive_connection(tamer::event<Vrchannel*>) {
+void Vrchannel::receive_connection(tamer::event<std::shared_ptr<Vrchannel> >) {
     assert(0);
 }
 

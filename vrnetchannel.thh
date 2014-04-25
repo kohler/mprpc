@@ -14,8 +14,8 @@ class Vrnetlistener : public Vrchannel {
     }
 
     tamed void connect(String peer_uid, Json peer_name,
-                       tamer::event<Vrchannel*> done);
-    tamed void receive_connection(tamer::event<Vrchannel*> done);
+                       tamer::event<std::shared_ptr<Vrchannel> > done);
+    tamed void receive_connection(tamer::event<std::shared_ptr<Vrchannel> > done);
 
     void close();
 

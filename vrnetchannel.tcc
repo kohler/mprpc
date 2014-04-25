@@ -42,7 +42,7 @@ tamed void Vrnetlistener::complete_unix_listen(String path) {
 }
 
 tamed void Vrnetlistener::connect(String peer_uid, Json peer_name,
-                                  tamer::event<Vrchannel*> done) {
+                                  tamer::event<std::shared_ptr<Vrchannel> > done) {
     tamed { struct in_addr a; tamer::fd cfd; }
 
     if ((peer_name["ip"].is_null() || peer_name["ip"].is_s())
@@ -59,10 +59,9 @@ tamed void Vrnetlistener::connect(String peer_uid, Json peer_name,
         twait { tamer::unix_stream_connect(peer_name["path"].to_s(),
                                            tamer::make_event(cfd)); }
 
-    if (cfd) {
-        Vrnetchannel* c = new Vrnetchannel(local_uid(), peer_uid, std::move(cfd));
-        done(c);
-    } else
+    if (cfd)
+        done(std::make_shared<Vrnetchannel>(local_uid(), peer_uid, std::move(cfd)));
+    else
         done(nullptr);
 }
 
@@ -71,7 +70,7 @@ typedef union {
     struct sockaddr_in sin;
 } my_sockaddr_union;
 
-tamed void Vrnetlistener::receive_connection(tamer::event<Vrchannel*> done) {
+tamed void Vrnetlistener::receive_connection(tamer::event<std::shared_ptr<Vrchannel> > done) {
     tamed {
         my_sockaddr_union sa;
         socklen_t salen = sizeof(sa);
@@ -80,10 +79,9 @@ tamed void Vrnetlistener::receive_connection(tamer::event<Vrchannel*> done) {
 
     twait { fd_.accept(&sa.s, &salen, tamer::make_event(cfd)); }
 
-    if (cfd) {
-        Vrnetchannel* c = new Vrnetchannel(local_uid(), String(), std::move(cfd));
-        done(c);
-    } else {
+    if (cfd)
+        done(std::make_shared<Vrnetchannel>(local_uid(), String(), std::move(cfd)));
+    else {
         std::cerr << strerror(-cfd.error()) << "\n";
         done(nullptr);
     }

@@ -159,7 +159,7 @@ tamed void start_run_killreplicas(const Vrview& config,
     tamed {
         std::mt19937 rg(time(0));
         Vrnetlistener conn("k." + Vrchannel::random_uid(rg), 0, rg);
-        Vrchannel* chan;
+        std::shared_ptr<Vrchannel> chan;
         const Vrview::member_type* mem;
         size_t i;
         std::set<String> killed;
@@ -173,7 +173,6 @@ tamed void start_run_killreplicas(const Vrview& config,
             if (chan) {
                 twait { chan->send(Json::array("kill"), make_event()); }
                 std::cerr << mem->uid << ": killed\n";
-                delete chan;
             } else
                 std::cerr << mem->uid << ": connection failed\n";
         } else if (uids[i] == "all") {

@@ -38,12 +38,12 @@ class Vrtestlistener : public Vrchannel {
         set_channel_uid(my_uid);
     }
     void connect(String peer_uid, Json peer_name,
-                 tamer::event<Vrchannel*> done);
-    void receive_connection(tamer::event<Vrchannel*> done);
+                 tamer::event<std::shared_ptr<Vrchannel> > done);
+    void receive_connection(tamer::event<std::shared_ptr<Vrchannel> > done);
 
   private:
     Vrtestcollection* collection_;
-    tamer::channel<Vrchannel*> listenq_;
+    tamer::channel<std::shared_ptr<Vrchannel> > listenq_;
     friend class Vrtestnode;
 };
 
@@ -87,7 +87,7 @@ Vrtestchannel* Vrtestnode::connect(Vrtestnode* n) {
     Vrtestchannel* peer = new Vrtestchannel(n, this, collection_->loss_p());
     my->peer_ = peer;
     peer->peer_ = my;
-    n->listener()->listenq_.push_back(peer);
+    n->listener()->listenq_.push_back(std::shared_ptr<Vrchannel>(peer));
     return my;
 }
 
@@ -181,14 +181,15 @@ tamed void Vrtestchannel::coroutine() {
 }
 
 
-void Vrtestlistener::connect(String peer_uid, Json, event<Vrchannel*> done) {
-    if (Vrtestnode* n = collection_->test_node(peer_uid))
-        done(collection_->test_node(local_uid())->connect(n));
-    else
+void Vrtestlistener::connect(String peer_uid, Json, event<std::shared_ptr<Vrchannel> > done) {
+    if (Vrtestnode* n = collection_->test_node(peer_uid)) {
+        Vrchannel* c = collection_->test_node(local_uid())->connect(n);
+        done(std::shared_ptr<Vrchannel>(c));
+    } else
         done(nullptr);
 }
 
-void Vrtestlistener::receive_connection(event<Vrchannel*> done) {
+void Vrtestlistener::receive_connection(event<std::shared_ptr<Vrchannel> > done) {
     listenq_.pop_front(done);
 }
 

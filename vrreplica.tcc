@@ -119,7 +119,7 @@ void Vrreplica::verify_state() const {
 }
 
 tamed void Vrreplica::listen_loop() {
-    tamed { Vrchannel* peer; }
+    tamed { std::shared_ptr<Vrchannel> peer; }
     while (1) {
         twait { me_->receive_connection(make_event(peer)); }
         if (!peer)
@@ -130,7 +130,7 @@ tamed void Vrreplica::listen_loop() {
 
 tamed void Vrreplica::connect(String peer_uid, event<> done) {
     tamed {
-        Vrchannel* peer;
+        std::shared_ptr<Vrchannel> peer;
         channel_type* ch = &channels_[peer_uid];
         tamer::ref_monitor mon(ref_);
     }
@@ -212,23 +212,22 @@ void Vrreplica::join(const Vrview& config, event<> done) {
     }
 }
 
-tamed void Vrreplica::connection_handshake(Vrchannel* peer, bool active_end,
+tamed void Vrreplica::connection_handshake(std::shared_ptr<Vrchannel> peer,
+                                           bool active_end,
                                            tamer::event<> done) {
     tamed { bool ok = false; }
     twait { peer->handshake(active_end, k_.message_timeout,
                             k_.handshake_timeout, make_event(ok)); }
-    if (!ok)
-        delete peer;
-    else {
+    if (ok) {
         String peer_uid = peer->remote_uid();
         channel_type& ch = channels_[peer_uid];
 
-        ch.add(peer);
-        if (ch.cs[0] == peer && ch.cs[1]) {
+        ch.add(peer.get());
+        if (ch.cs[0] == peer.get() && ch.cs[1]) {
             log_connection(peer) << "dropping old connection (" << ch.cs[1]->channel_uid() << ")\n";
             ch.cs[1]->close();
             ch.remove(ch.cs[1]);
-        } else if (ch.cs[0] != peer) {
+        } else if (ch.cs[0] != peer.get()) {
             log_connection(peer) << "preferring old connection (" << ch.cs[0]->channel_uid() << ")\n";
             ch.cs[0]->send_handshake(true);
         }
@@ -240,7 +239,7 @@ tamed void Vrreplica::connection_handshake(Vrchannel* peer, bool active_end,
     done();
 }
 
-tamed void Vrreplica::connection_loop(Vrchannel* peer) {
+tamed void Vrreplica::connection_loop(std::shared_ptr<Vrchannel> peer) {
     tamed { Json msg; }
 
     while (1) {
@@ -255,22 +254,21 @@ tamed void Vrreplica::connection_loop(Vrchannel* peer) {
         if (msg[0] == Vrchannel::m_handshake)
             peer->process_handshake(msg);
         else if (msg[0] == Vrchannel::m_request)
-            process_request(peer, msg);
+            process_request(peer.get(), msg);
         else if (msg[0] == Vrchannel::m_commit)
-            process_commit(peer, msg);
+            process_commit(peer.get(), msg);
         else if (msg[0] == Vrchannel::m_ack)
-            process_ack(peer, msg);
+            process_ack(peer.get(), msg);
         else if (msg[0] == Vrchannel::m_join)
-            process_join(peer, msg);
+            process_join(peer.get(), msg);
         else if (msg[0] == Vrchannel::m_view)
-            process_view(peer, msg);
+            process_view(peer.get(), msg);
         else if (msg[0] == Vrchannel::m_kill)
             exit(0);
     }
 
     log_connection(peer) << "connection closed\n";
-    channels_[peer->remote_uid()].remove(peer);
-    delete peer;
+    channels_[peer->remote_uid()].remove(peer.get());
 }
 
 void Vrreplica::at_view(viewnumber_t viewno, tamer::event<> done) {
