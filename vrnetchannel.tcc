@@ -82,7 +82,9 @@ tamed void Vrnetlistener::receive_connection(tamer::event<std::shared_ptr<Vrchan
     if (cfd)
         done(std::make_shared<Vrnetchannel>(local_uid(), String(), std::move(cfd)));
     else {
-        std::cerr << strerror(-cfd.error()) << "\n";
+        log_connection(this) << "error in receiving connection: "
+                             << strerror(-cfd.error())
+                             << " (listener value " << fd_.value() << ")\n";
         done(nullptr);
     }
 }
