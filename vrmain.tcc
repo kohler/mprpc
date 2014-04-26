@@ -43,7 +43,7 @@ tamed void many_requests(Vrclient* client) {
     while (1) {
         twait { tamer::at_delay(0.5, make_event()); }
         ++n;
-        twait { client->request("req" + String(n), make_event()); }
+        twait volatile { client->request("req" + String(n), make_event()); }
     }
 }
 
