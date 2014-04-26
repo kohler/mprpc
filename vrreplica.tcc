@@ -132,7 +132,6 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
     tamed {
         std::shared_ptr<Vrchannel> peer;
         channel_type* ch = &channels_[peer_uid];
-        tamer::ref_monitor mon(ref_);
     }
 
     // does peer already exist?
@@ -156,8 +155,6 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
     twait { tamer::at_delay(rand01() / 100, make_event()); }
 
     // connected during delay?
-    if (!mon)
-        return;
     if (ch->cs[0]) {
         assert(!ch->connecting);
         return;
@@ -170,11 +167,10 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
             assert(peer->remote_uid() == peer_uid);
             peer->set_channel_uid(Vrchannel::random_uid(rg_));
             twait { connection_handshake(peer, true, make_event()); }
-        } else if (mon) {
+        } else {
             twait { tamer::at_delay(ch->backoff, make_event()); }
             ch->backoff = std::min(ch->backoff * 2, 10.0);
-        } else
-            return;
+        }
     }
 
     ch->connecting = false;
@@ -182,8 +178,8 @@ tamed void Vrreplica::connect(String peer_uid, event<> done) {
 }
 
 tamed void Vrreplica::join(String peer_uid, event<> done) {
-    tamed { Vrchannel* ep; tamer::ref_monitor mon(ref_); }
-    while (mon && next_view_.size() == 1) {
+    tamed { Vrchannel* ep; }
+    while (next_view_.size() == 1) {
         if ((ep = channels_[peer_uid].cs[0])) {
             ep->send(Json::array(Vrchannel::m_join, Json::null));
             twait {

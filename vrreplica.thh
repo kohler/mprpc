@@ -4,14 +4,13 @@
 #include "logger.hh"
 #include "vrview.hh"
 #include "vrchannel.hh"
-#include <tamer/ref.hh>
 #include <unordered_map>
 #include <random>
 #include <iostream>
 using tamer::event;
 class Vrstate;
 
-class Vrreplica {
+class Vrreplica : public tamer::tamed_class {
   public:
     Vrreplica(Vrstate* state,
               const Vrview& config,
@@ -122,8 +121,6 @@ class Vrreplica {
     double commit_sent_at_;
     double primary_received_at_;
     std::mt19937& rg_;
-
-    tamer::ref ref_;
 
     inline bool is_primary() const {
         return cur_view_.me_primary();
