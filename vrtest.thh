@@ -20,6 +20,7 @@ class Vrtestnode;
 class Vrtestcollection {
   public:
     Vrtestcollection(unsigned seed, double loss_p);
+    ~Vrtestcollection();
 
     Vrreplica* add_replica(const String& uid);
     Vrclient* add_client(const String& uid);

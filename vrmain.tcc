@@ -39,30 +39,28 @@ uint64_t truly_random_u64() {
 
 tamed void many_requests(Vrclient* client) {
     tamed { int n = 1; }
+    tamer::exit_at_destroy(client);
     while (1) {
-        twait { client->request("req" + String(n), make_event()); }
-        ++n;
         twait { tamer::at_delay(0.5, make_event()); }
+        ++n;
+        twait { client->request("req" + String(n), make_event()); }
     }
 }
 
-tamed void go(Vrtestcollection& vrg, std::vector<Vrreplica*>& nodes) {
+tamed void go(Vrtestcollection& vrg, std::vector<Vrreplica*>& nodes,
+              double test_time, volatile bool* running) {
     tamed {
         Vrclient* client;
         Json j;
     }
-    for (unsigned i = 0; i < nodes.size(); ++i)
-        nodes[i]->dump(std::cout);
+    *running = true;
+
     twait { nodes[0]->join(nodes[1]->uid(), make_event()); }
-    for (unsigned i = 0; i < nodes.size(); ++i)
-        nodes[i]->dump(std::cout);
     twait {
         nodes[0]->at_view(1, make_event());
         nodes[1]->at_view(1, make_event());
     }
 
-    for (unsigned i = 0; i < nodes.size(); ++i)
-        nodes[i]->dump(std::cout);
     twait { nodes[2]->join(nodes[0]->uid(), make_event()); }
     twait {
         nodes[0]->at_view(2, make_event());
@@ -70,8 +68,6 @@ tamed void go(Vrtestcollection& vrg, std::vector<Vrreplica*>& nodes) {
         nodes[2]->at_view(2, make_event());
     }
 
-    for (unsigned i = 0; i < nodes.size(); ++i)
-        nodes[i]->dump(std::cout);
     twait { nodes[4]->join(nodes[0]->uid(), make_event()); }
     twait {
         nodes[0]->at_view(3, make_event());
@@ -91,19 +87,22 @@ tamed void go(Vrtestcollection& vrg, std::vector<Vrreplica*>& nodes) {
     twait { tamer::at_delay_sec(5, make_event()); }
     nodes[4]->go();
 
-    twait { tamer::at_delay_sec(50000, make_event()); }
-    exit(0);
+    twait { tamer::at_delay_sec(test_time, make_event()); }
+
+    *running = false;
+    delete client;
 }
 
-void run_test(unsigned seed, double loss_p, unsigned n) {
+void run_test(unsigned seed, unsigned n, double loss_p, double test_time) {
     Vrtestcollection vrg(seed, loss_p);
     std::vector<Vrreplica*> nodes;
     for (unsigned i = 0; i < n; ++i)
         nodes.push_back(vrg.add_replica(make_replica_uid()));
 
-    go(vrg, nodes);
+    volatile bool running;
+    go(vrg, nodes, test_time, &running);
 
-    while (1) {
+    while (running) {
         tamer::once();
         vrg.check();
     }
@@ -147,9 +146,9 @@ tamed void run_fsclientreq(Vrclient* client, Json clientreq) {
 
 void run_fsclient(const Vrview& config, Json clientreq) {
     std::mt19937 rg(truly_random_u64());
-    Vrnetlistener* conn = new Vrnetlistener("c." + Vrchannel::random_uid(rg),
-                                            0, rg);
-    Vrclient* client = new Vrclient(conn, config, rg);
+    Vrclient* client =
+        new Vrclient(std::make_shared<Vrnetlistener>("c." + Vrchannel::random_uid(rg), 0, rg),
+                     config, rg);
     run_fsclientreq(client, std::move(clientreq));
     tamer::loop();
 }
@@ -199,7 +198,8 @@ static Clp_Option options[] = {
     { "replica", 'r', 0, Clp_ValString, 0 },
     { "kill", 'k', 0, Clp_ValString, 0 },
     { "master", 'm', 0, Clp_ValString, 0 },
-    { "logfile", 0, 0, Clp_ValString, 0 }
+    { "logfile", 0, 0, Clp_ValString, 0 },
+    { "time", 'T', 0, Clp_ValDouble, 0 }
 };
 
 int main(int argc, char** argv) {
@@ -207,6 +207,7 @@ int main(int argc, char** argv) {
     unsigned n = 0;
     unsigned seed = std::mt19937::default_seed;
     double loss_p = 0.1;
+    double test_time = 50000;
     String configfile;
     String replicaname;
     String mastername;
@@ -249,7 +250,9 @@ int main(int argc, char** argv) {
                 exit(1);
             }
             logger.stream(*s);
-        } else if (clp->option->option_id == Clp_NotOption) {
+        } else if (Clp_IsLong(clp, "time"))
+            test_time = clp->val.d;
+        else if (clp->option->option_id == Clp_NotOption) {
             if (!clientreq)
                 clientreq = Json::array();
             Json j = Json::parse(clp->vstr);
@@ -289,7 +292,7 @@ int main(int argc, char** argv) {
                 config.primary_index = m - config.members.data();
         run_fsclient(config, clientreq);
     } else if (config.empty())
-        run_test(seed, loss_p, n ? n : 5);
+        run_test(seed, n ? n : 5, loss_p, test_time);
 
     tamer::cleanup();
     Clp_DeleteParser(clp);

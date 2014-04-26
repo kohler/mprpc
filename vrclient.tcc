@@ -2,19 +2,17 @@
 #include "vrclient.hh"
 #include "vrchannel.hh"
 
-Vrclient::Vrclient(Vrchannel* me, const Vrview& config, std::mt19937& rg)
+Vrclient::Vrclient(std::shared_ptr<Vrchannel> me, const Vrview& config,
+                   std::mt19937& rg)
     : client_seqno_(1), channel_(nullptr), me_(me), view_(config),
       stopped_(false), rg_(rg) {
     merge_view_peer_names();
 }
 
 Vrclient::~Vrclient() {
-    for (auto it = at_response_.begin(); it != at_response_.end(); ++it)
-        it->second.unblock();
     if (channel_)
         channel_->close();      // the coroutine will delete it
-    delete me_;
-    at_view_change_();
+    me_->close();
 }
 
 void Vrclient::merge_view_peer_names() {

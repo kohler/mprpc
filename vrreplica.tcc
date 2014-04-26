@@ -40,6 +40,10 @@ Vrreplica::Vrreplica(Vrstate* state, const Vrview& config,
         connect(it->uid, tamer::event<>());
 }
 
+Vrreplica::~Vrreplica() {
+    me_->close();
+}
+
 void Vrreplica::dump(std::ostream& out) const {
     timeval now = tamer::now();
     out << now << ":" << uid() << ": " << unparse_view_state()
@@ -121,7 +125,7 @@ void Vrreplica::verify_state() const {
 tamed void Vrreplica::listen_loop() {
     tamed { std::shared_ptr<Vrchannel> peer; }
     while (1) {
-        twait { me_->receive_connection(make_event(peer)); }
+        twait volatile { me_->receive_connection(make_event(peer)); }
         if (!peer)
             break;
         connection_handshake(peer, false, tamer::event<>());

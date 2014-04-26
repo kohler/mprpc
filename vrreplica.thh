@@ -16,6 +16,7 @@ class Vrreplica : public tamer::tamed_class {
               const Vrview& config,
               Vrchannel* me,
               std::mt19937& rg);
+    ~Vrreplica();
 
     String uid() const {
         return me_->local_uid();

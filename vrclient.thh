@@ -9,7 +9,9 @@ class Vrchannel;
 
 class Vrclient : public tamer::tamed_class {
   public:
-    Vrclient(Vrchannel* me, const Vrview& config, std::mt19937& rg);
+    Vrclient(std::shared_ptr<Vrchannel> me,
+             const Vrview& config,
+             std::mt19937& rg);
     ~Vrclient();
 
     tamed void connect(tamer::event<> done);
@@ -20,7 +22,7 @@ class Vrclient : public tamer::tamed_class {
     unsigned client_seqno_;
     tamer::event<> at_view_change_;
     Vrchannel* channel_;
-    Vrchannel* me_;
+    std::shared_ptr<Vrchannel> me_;
     Vrview view_;
     Json peer_names_;
     bool stopped_;

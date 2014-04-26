@@ -9,6 +9,7 @@
 class Vrtestnode {
   public:
     inline Vrtestnode(const String& uid, Vrtestcollection* collection);
+    ~Vrtestnode();
 
     inline const String& uid() const {
         return uid_;
@@ -16,7 +17,7 @@ class Vrtestnode {
     inline Json name() const {
         return Json::object("uid", uid_);
     }
-    inline Vrtestlistener* listener() const {
+    inline const std::shared_ptr<Vrtestlistener>& listener() const {
         return listener_;
     }
     inline Vrtestcollection* collection() const {
@@ -28,7 +29,7 @@ class Vrtestnode {
   private:
     String uid_;
     Vrtestcollection* collection_;
-    Vrtestlistener* listener_;
+    std::shared_ptr<Vrtestlistener> listener_;
 };
 
 class Vrtestlistener : public Vrchannel {
@@ -40,6 +41,7 @@ class Vrtestlistener : public Vrchannel {
     void connect(String peer_uid, Json peer_name,
                  tamer::event<std::shared_ptr<Vrchannel> > done);
     void receive_connection(tamer::event<std::shared_ptr<Vrchannel> > done);
+    void close();
 
   private:
     Vrtestcollection* collection_;
@@ -47,7 +49,7 @@ class Vrtestlistener : public Vrchannel {
     friend class Vrtestnode;
 };
 
-class Vrtestchannel : public Vrchannel {
+class Vrtestchannel : public tamer::tamed_class, public Vrchannel {
   public:
     Vrtestchannel(Vrtestnode* from, Vrtestnode* to, double loss_p);
     ~Vrtestchannel();
@@ -69,7 +71,6 @@ class Vrtestchannel : public Vrchannel {
     std::deque<tamer::event<Json> > w_;
     Vrtestchannel* peer_;
     tamer::event<> coroutine_;
-    tamer::ref ref_;
     tamed void coroutine();
     inline void do_send(Json msg);
     friend class Vrtestnode;
@@ -77,8 +78,12 @@ class Vrtestchannel : public Vrchannel {
 
 
 Vrtestnode::Vrtestnode(const String& uid, Vrtestcollection* collection)
-    : uid_(uid), collection_(collection) {
-    listener_ = new Vrtestlistener(uid, collection);
+    : uid_(uid), collection_(collection),
+      listener_(std::make_shared<Vrtestlistener>(uid, collection)) {
+}
+
+Vrtestnode::~Vrtestnode() {
+    listener_->close();
 }
 
 Vrtestchannel* Vrtestnode::connect(Vrtestnode* n) {
@@ -143,7 +148,7 @@ inline void Vrtestchannel::do_send(Json msg) {
 }
 
 void Vrtestchannel::send(Json msg, tamer::event<> done) {
-    if ((!loss_p_ || collection()->rand01() >= loss_p_) && peer_)
+    if (peer_ && (!loss_p_ || collection()->rand01() >= loss_p_))
         peer_->do_send(std::move(msg));
     done();
 }
@@ -164,8 +169,7 @@ void Vrtestchannel::receive(event<Json> done) {
 }
 
 tamed void Vrtestchannel::coroutine() {
-    tamed { tamer::ref_monitor mon(ref_); }
-    while (mon) {
+    while (1) {
         while (!w_.empty() && !w_.front())
             w_.pop_front();
         if (!w_.empty() && !q_.empty()
@@ -182,7 +186,8 @@ tamed void Vrtestchannel::coroutine() {
 
 
 void Vrtestlistener::connect(String peer_uid, Json, event<std::shared_ptr<Vrchannel> > done) {
-    if (Vrtestnode* n = collection_->test_node(peer_uid)) {
+    Vrtestnode* n;
+    if (collection_ && (n = collection_->test_node(peer_uid))) {
         Vrchannel* c = collection_->test_node(local_uid())->connect(n);
         done(std::shared_ptr<Vrchannel>(c));
     } else
@@ -193,17 +198,29 @@ void Vrtestlistener::receive_connection(event<std::shared_ptr<Vrchannel> > done)
     listenq_.pop_front(done);
 }
 
+void Vrtestlistener::close() {
+    collection_ = nullptr;
+}
+
 
 Vrtestcollection::Vrtestcollection(unsigned seed, double loss_p)
     : state_(new Vrstate), rg_(seed), loss_p_(loss_p),
       decideno_(0), commitno_(0) {
 }
 
+Vrtestcollection::~Vrtestcollection() {
+    for (auto it = replicas_.begin(); it != replicas_.end(); ++it)
+        delete *it;
+    for (auto it = testnodes_.begin(); it != testnodes_.end(); ++it)
+        delete it->second;
+    delete state_;
+}
+
 Vrreplica* Vrtestcollection::add_replica(const String& uid) {
     assert(testnodes_.find(uid) == testnodes_.end());
     Vrtestnode* tn = new Vrtestnode(uid, this);
     testnodes_[uid] = tn;
-    Vrreplica* r = new Vrreplica(state_, Vrview(), tn->listener(), rg_);
+    Vrreplica* r = new Vrreplica(state_, Vrview(), tn->listener().get(), rg_);
     replica_map_[uid] = r;
     replicas_.push_back(r);
     std::sort(replicas_.begin(), replicas_.end(), [](Vrreplica* a, Vrreplica* b) {
