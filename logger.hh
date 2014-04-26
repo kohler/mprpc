@@ -13,12 +13,15 @@ class Logger {
     inline Logger& operator()();
     inline Logger& operator()(bool active);
     inline bool active() const;
+    inline bool quiet() const;
+    inline void set_quiet(bool quiet);
     inline unsigned frequency() const;
     inline void set_frequency(unsigned frequency);
   private:
     std::ostream* stream_;
     StringAccum buffer_;
     bool active_;
+    bool quiet_;
     unsigned frequency_;
     unsigned count_;
     Logger(const Logger&) = delete;
@@ -68,6 +71,14 @@ inline Logger& Logger::operator()(bool active) {
 
 inline bool Logger::active() const {
     return active_;
+}
+
+inline bool Logger::quiet() const {
+    return quiet_;
+}
+
+inline void Logger::set_quiet(bool q) {
+    quiet_ = q;
 }
 
 inline unsigned Logger::frequency() const {

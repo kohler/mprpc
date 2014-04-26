@@ -250,7 +250,10 @@ tamed void Vrreplica::connection_loop(std::shared_ptr<Vrchannel> peer) {
             break;
         if (stopped_) // ignore message
             continue;
-        log_receive(peer) << msg << " " << unparse_view_state() << "\n";
+        // don't print keepalives if quiet
+        if (!logger.quiet() || logger.frequency()
+            || msg[0] != Vrchannel::m_commit || msg.size() != 5)
+            log_receive(peer) << msg << " " << unparse_view_state() << "\n";
         if (msg[0] == Vrchannel::m_handshake)
             peer->process_handshake(msg);
         else if (msg[0] == Vrchannel::m_request)

@@ -226,10 +226,13 @@ int main(int argc, char** argv) {
             assert(clp->val.d >= 0 && clp->val.d <= 1);
             loss_p = clp->val.d;
         } else if (Clp_IsLong(clp, "quiet")) {
-            if (clp->negated)
+            if (clp->negated) {
+                logger.set_quiet(false);
                 logger.set_frequency(0);
+            } else if (!logger.quiet())
+                logger.set_quiet(true);
             else
-                logger.set_frequency(std::max(logger.frequency(), 1000U) * 2);
+                logger.set_frequency(std::max(logger.frequency(), 2000U) * 2);
         } else if (Clp_IsLong(clp, "config"))
             configfile = clp->negated ? String() : String(clp->vstr);
         else if (Clp_IsLong(clp, "replica"))
