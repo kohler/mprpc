@@ -38,8 +38,7 @@ uint64_t truly_random_u64() {
 }
 
 tamed void many_requests(Vrclient* client) {
-    tamed { int n = 1; }
-    tamer::exit_at_destroy(client);
+    tamed { int n = 1; tamer::destroy_guard guard(client); }
     while (1) {
         twait { tamer::at_delay(0.5, make_event()); }
         ++n;
