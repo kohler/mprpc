@@ -304,7 +304,7 @@ inline String Vrreplica::view_why(const String& why) const {
 void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
     Json payload = msg[3];
     Vrview v;
-    if (!msg[2].is_u()
+    if (!msg[2].is_posint()
         || !v.assign_parse(payload, true, uid())
         || !v.count(who->remote_uid())
         || v.group_name() != cur_view_.group_name()) {
@@ -370,7 +370,7 @@ void Vrreplica::process_view(Vrchannel* who, const Json& msg) {
 
 void Vrreplica::process_view_transfer_log(Vrchannel* who, viewnumber_t viewno,
                                           Json& payload) {
-    assert(payload["logno"].is_u()
+    assert(payload["logno"].is_posint()
            && payload["log"].is_a()
            && payload["log"].size() % 3 == 0
            && next_view_.me_primary());
@@ -423,7 +423,7 @@ void Vrreplica::process_view_transfer_log(Vrchannel* who, viewnumber_t viewno,
 
 void Vrreplica::process_view_check_log(Vrchannel* who, viewnumber_t viewno,
                                        Json& payload) {
-    assert(payload["logno"].is_u()
+    assert(payload["logno"].is_posint()
            && payload["log"].is_a()
            && payload["log"].size() % 3 == 0);
     lognumber_t logno = payload["logno"].to_u();
@@ -579,7 +579,7 @@ tamed void Vrreplica::send_peer(String peer_uid, Json msg) {
 void Vrreplica::process_request(Vrchannel* who, Json& msg) {
     bool retransmit = msg[2].is_b() && msg[2];
     int seqno_offset = msg[2].is_b() ? 3 : 2;
-    if (msg.size() <= seqno_offset || !msg[seqno_offset].is_u()) {
+    if (msg.size() <= seqno_offset || !msg[seqno_offset].is_posint()) {
         who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
     } else if (!is_primary() || between_views()) {
@@ -669,9 +669,9 @@ void Vrreplica::send_commit_log(Vrview::member_type* peer,
 void Vrreplica::process_commit(Vrchannel* who, Json& msg) {
     if (msg.size() < 5
         || (msg.size() > 5 && (msg.size() - 6) % 3 != 0)
-        || !msg[2].is_u()
-        || !msg[3].is_u()
-        || (msg.size() > 4 && !msg[4].is_u())) {
+        || !msg[2].is_posint()
+        || !msg[3].is_posint()
+        || (msg.size() > 4 && !msg[4].is_posint())) {
         who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
     }
@@ -776,8 +776,8 @@ void Vrreplica::send_ack(Vrchannel* primary) {
 void Vrreplica::process_ack(Vrchannel* who, const Json& msg) {
     Vrview::member_type* peer;
     if (msg.size() < 4
-        || !msg[2].is_u()
-        || !msg[3].is_u()) {
+        || !msg[2].is_posint()
+        || !msg[3].is_posint()) {
         who->send(Json::array(Vrchannel::m_error, msg[1], false));
         return;
     } else if (msg[2].to_u() != cur_view_.viewno
