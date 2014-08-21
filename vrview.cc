@@ -46,7 +46,7 @@ bool Vrview::assign_parse(Json msg, bool require_view, const String& my_uid) {
         return false;
 
     Json viewnoj = msg["viewno"];
-    if (viewnoj.is_posint())
+    if (viewnoj.is_nonnegint())
         viewno = viewnoj.to_u();
     else if (viewnoj.is_null() && !require_view)
         viewno = 0;
@@ -55,7 +55,7 @@ bool Vrview::assign_parse(Json msg, bool require_view, const String& my_uid) {
 
     Json primaryj = msg["primary"];
     String primary_name;
-    if (primaryj.is_posint())
+    if (primaryj.is_nonnegint())
         primary_index = primaryj.to_i();
     else if (primaryj.is_s() && !membersj.is_o()) {
         primary_index = -1;

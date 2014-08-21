@@ -20,7 +20,7 @@ class Vrnetchannel : public Vrchannel {
 Vrnetlistener::Vrnetlistener(String local_uid, Json peer_name,
                              std::mt19937& rg)
     : Vrchannel(std::move(local_uid), String()), rg_(rg) {
-    if (peer_name && peer_name["port"].is_posint())
+    if (peer_name && peer_name["port"].is_nonnegint())
         fd_ = tamer::tcp_listen(peer_name["port"].to_i());
     else if (peer_name && peer_name["path"].is_s())
         complete_unix_listen(peer_name["path"].to_s());
@@ -46,7 +46,7 @@ tamed void Vrnetlistener::connect(String peer_uid, Json peer_name,
     tamed { struct in_addr a; tamer::fd cfd; }
 
     if ((peer_name["ip"].is_null() || peer_name["ip"].is_s())
-        && peer_name["port"].is_posint()) {
+        && peer_name["port"].is_nonnegint()) {
         if (peer_name["ip"].is_null())
             a.s_addr = htonl(INADDR_LOOPBACK);
         else {
