@@ -2,7 +2,8 @@
 #define VRVIEW_HH 1
 #include "vrlog.hh"
 
-struct Vrview {
+class Vrview {
+  public:
     struct member_type {
         String uid;
         Json peer_name;
@@ -53,7 +54,7 @@ struct Vrview {
         lognumber_t matching_logno_;
         double ackno_changed_at_;
 
-        friend struct Vrview;
+        friend class Vrview;
     };
 
     viewnumber_t viewno;
