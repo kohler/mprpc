@@ -108,10 +108,9 @@ tamed void Vrclient::connect(tamer::event<> done) {
         String peer_uid;
         std::shared_ptr<Vrchannel> peer;
         bool ok;
-        tamer::rendezvous<> r;
     }
 
-    while (1) {
+    while (true) {
         peer = nullptr;
         ok = false;
 

@@ -1,8 +1,8 @@
 dnl Process this file with autoconf to produce a configure script.
 
-AC_INIT([mprpc], [0.1])
+AC_INIT([mprpc],[0.1])
 AC_CONFIG_AUX_DIR([tamer])
-AC_PREREQ(2.60)
+AC_PREREQ([2.72])
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([GNUmakefile])
@@ -15,7 +15,7 @@ ac_user_cxxflags=${CXXFLAGS+y}
 AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_INSTALL
-AC_LANG_CPLUSPLUS
+AC_LANG([C++])
 
 AC_DEFINE([WORDS_BIGENDIAN_SET], [1], [Define if WORDS_BIGENDIAN has been set.])
 AC_C_BIGENDIAN()
